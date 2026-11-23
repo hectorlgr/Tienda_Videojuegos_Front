@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import ImageWithFallback from '../common/ImageWithFallback'
 import { publicAsset } from '../../utils/assets'
 import { getDiscountPercent, hasValidOffer } from '../../utils/pricing'
+import { gsap, motionAllowed, useGSAP } from '../../utils/storeAnimations'
 import ProductPrice from './ProductPrice'
 
 const AUTOPLAY_DELAY = 5000
@@ -11,6 +12,7 @@ const AUTOPLAY_DELAY = 5000
 export default function ProductCarousel({ products }) {
   const [current, setCurrent] = useState(0)
   const [paused, setPaused] = useState(false)
+  const { contextSafe } = useGSAP()
   const total = products.length
 
   useEffect(() => {
@@ -27,9 +29,19 @@ export default function ProductCarousel({ products }) {
   // Si el listado cambia de tamaño, evita quedar en un índice que ya no existe.
   const activeIndex = current % total
 
-  function goTo(index) {
+  const goTo = contextSafe((event, index) => {
     setCurrent((index + total) % total)
-  }
+
+    if (window.matchMedia?.(motionAllowed).matches) {
+      gsap.fromTo(event.currentTarget, { scale: 0.9 }, {
+        scale: 1,
+        duration: 0.2,
+        ease: 'power2.out',
+        overwrite: 'auto',
+        clearProps: 'scale',
+      })
+    }
+  })
 
   return (
     <div
@@ -84,7 +96,7 @@ export default function ProductCarousel({ products }) {
             className="product-carousel-arrow is-prev"
             type="button"
             aria-label="Producto anterior"
-            onClick={() => goTo(activeIndex - 1)}
+            onClick={event => goTo(event, activeIndex - 1)}
           >
             <i className="fa fa-chevron-left" aria-hidden="true" />
           </button>
@@ -92,7 +104,7 @@ export default function ProductCarousel({ products }) {
             className="product-carousel-arrow is-next"
             type="button"
             aria-label="Producto siguiente"
-            onClick={() => goTo(activeIndex + 1)}
+            onClick={event => goTo(event, activeIndex + 1)}
           >
             <i className="fa fa-chevron-right" aria-hidden="true" />
           </button>
@@ -104,7 +116,7 @@ export default function ProductCarousel({ products }) {
                 className={index === activeIndex ? 'is-active' : undefined}
                 aria-label={`Ir a ${product.nombre}`}
                 aria-current={index === activeIndex}
-                onClick={() => goTo(index)}
+                onClick={event => goTo(event, index)}
               />
             ))}
           </div>

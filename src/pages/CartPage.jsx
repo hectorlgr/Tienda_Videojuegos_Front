@@ -1,3 +1,4 @@
+import { useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import ImageWithFallback from '../components/common/ImageWithFallback'
 import CartQuantityControl from '../components/store/CartQuantityControl'
@@ -7,11 +8,59 @@ import { publicAsset } from '../utils/assets'
 import { formatCLP } from '../utils/currency'
 import { getEffectivePrice } from '../utils/pricing'
 import { calculateLineSubtotal, calculateProductsSubtotal, isValidPrice } from '../utils/cartCalculations'
+import { gsap, motionAllowed, useGSAP } from '../utils/storeAnimations'
 
-function CartLine({ line }) {
+function CartLine({ line, returnFocusRef }) {
   const { removeItem } = useCart()
+  const lineRef = useRef(null)
+  const [removing, setRemoving] = useState(false)
   const { productoId, cantidad, product, stock } = line
   const subtotal = calculateLineSubtotal(line)
+
+  const { contextSafe } = useGSAP(() => {
+    if (!window.matchMedia?.(motionAllowed).matches) return
+
+    gsap.from(lineRef.current, {
+      opacity: 0.6,
+      y: 8,
+      duration: 0.22,
+      ease: 'power2.out',
+      clearProps: 'opacity,transform',
+    })
+  }, { scope: lineRef })
+
+  const animateRemoval = contextSafe((element, finish) => {
+    gsap.to(element, {
+      opacity: 0,
+      y: -8,
+      duration: 0.18,
+      ease: 'power2.in',
+      overwrite: 'auto',
+      onComplete: finish,
+      onInterrupt: finish,
+    })
+  })
+
+  function handleRemove() {
+    if (removing) return
+    const element = lineRef.current
+
+    function finish() {
+      if (element.contains(document.activeElement)) {
+        returnFocusRef.current?.focus({ preventScroll: true })
+      }
+      removeItem(productoId)
+    }
+
+    if (!window.matchMedia?.(motionAllowed).matches) {
+      finish()
+      return
+    }
+
+    setRemoving(true)
+    animateRemoval(element, finish)
+  }
+
   const image = (
     <ImageWithFallback
       src={product?.imagen ? publicAsset(product.imagen) : undefined}
@@ -21,7 +70,7 @@ function CartLine({ line }) {
   )
 
   return (
-    <li className="cart-line card shadow-sm">
+    <li className="cart-line card shadow-sm" ref={lineRef}>
       {product ? <Link to={`/productos/${productoId}`}>{image}</Link> : image}
       <h2 className="cart-line-name">
         {product ? <Link to={`/productos/${productoId}`}>{product.nombre}</Link> : 'Producto no disponible'}
@@ -59,7 +108,8 @@ function CartLine({ line }) {
         type="button"
         className="btn btn-outline-danger cart-line-remove"
         aria-label={`Eliminar ${product ? product.nombre : 'producto no disponible'} del carrito`}
-        onClick={() => removeItem(productoId)}
+        aria-disabled={removing}
+        onClick={handleRemove}
       >
         <i className="fa fa-trash" aria-hidden="true" /> Eliminar
       </button>
@@ -68,6 +118,7 @@ function CartLine({ line }) {
 }
 
 export default function CartPage() {
+  const titleRef = useRef(null)
   const { clearCart } = useCart()
   const { lines, loading, error } = useCartDetails()
   const productsSubtotal = !loading && !error ? calculateProductsSubtotal(lines) : null
@@ -85,7 +136,7 @@ export default function CartPage() {
       </nav>
       <section className="section cart-page" aria-labelledby="cart-title">
         <div className="container">
-          <h1 id="cart-title" className="mb-4">Mi carrito de compras</h1>
+          <h1 id="cart-title" className="mb-4" ref={titleRef} tabIndex={-1}>Mi carrito de compras</h1>
           <div aria-busy={loading}>
             {loading ? (
               <p className="catalog-state" role="status">Cargando tu carrito…</p>
@@ -98,7 +149,7 @@ export default function CartPage() {
             ) : (
               <>
                 <ul className="cart-lines" aria-label="Productos del carrito">
-                  {lines.map(line => <CartLine key={line.productoId} line={line} />)}
+                  {lines.map(line => <CartLine key={line.productoId} line={line} returnFocusRef={titleRef} />)}
                 </ul>
                 <dl className="cart-products-subtotal">
                   <div>

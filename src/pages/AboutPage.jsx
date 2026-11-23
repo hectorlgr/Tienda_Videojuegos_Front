@@ -1,6 +1,8 @@
+import { useRef } from 'react'
 import { Link } from 'react-router-dom'
 import ImageWithFallback from '../components/common/ImageWithFallback'
 import { publicAsset } from '../utils/assets'
+import { gsap, motionAllowed, useGSAP } from '../utils/storeAnimations'
 
 // Contenido estático: para cambiar textos basta con editar estas listas.
 const offerings = [
@@ -17,6 +19,29 @@ const values = [
 ]
 
 export default function AboutPage() {
+  const offeringsRef = useRef(null)
+
+  useGSAP(() => {
+    const media = gsap.matchMedia(offeringsRef)
+
+    media.add(motionAllowed, () => {
+      gsap.from('.about-card', {
+        y: 16,
+        opacity: 0.55,
+        duration: 0.45,
+        stagger: 0.08,
+        ease: 'power2.out',
+        scrollTrigger: {
+          trigger: offeringsRef.current,
+          start: 'top 85%',
+          once: true,
+        },
+      })
+    })
+
+    return () => media.revert()
+  }, { scope: offeringsRef })
+
   return (
     <div className="about-page">
       <title>Nosotros — CheckPoint Store</title>
@@ -49,7 +74,7 @@ export default function AboutPage() {
       </section>
 
       {/* Qué vendemos */}
-      <section className="section about-offerings" aria-labelledby="about-offerings-title">
+      <section ref={offeringsRef} className="section about-offerings" aria-labelledby="about-offerings-title">
         <div className="container">
           <h2 id="about-offerings-title" className="home-section-title">¿Qué vendemos?</h2>
           <div className="row g-3">

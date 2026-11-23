@@ -470,6 +470,7 @@ a:focus-visible, button:focus-visible {
 .home-editorial-banner {
   display: grid;
   align-items: center;
+  overflow: hidden;
   background: #e4e7ed;
 }
 

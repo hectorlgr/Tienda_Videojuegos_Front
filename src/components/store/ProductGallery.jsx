@@ -1,6 +1,7 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import ImageWithFallback from '../common/ImageWithFallback'
 import { publicAsset } from '../../utils/assets'
+import { gsap, motionAllowed, useGSAP } from '../../utils/storeAnimations'
 
 function isImagePath(value) {
   return typeof value === 'string' && value.trim().length > 0
@@ -18,13 +19,39 @@ export default function ProductGallery({ product }) {
     Math.max(0, galleryImages.indexOf(initialImage))
   ))
   const selectedImage = galleryImages[selectedIndex]
+  const mainImageRef = useRef(null)
+  const animateNextImage = useRef(false)
+  const { contextSafe } = useGSAP({ scope: mainImageRef })
+
+  function selectImage(index) {
+    if (index === selectedIndex) return
+    if (galleryImages[index] !== selectedImage) animateNextImage.current = true
+    setSelectedIndex(index)
+  }
+
+  const fadeImage = contextSafe(image => {
+    gsap.fromTo(image, { opacity: 0.45 }, {
+      opacity: 1,
+      duration: 0.25,
+      ease: 'power2.out',
+      overwrite: 'auto',
+      clearProps: 'opacity',
+    })
+  })
+
+  function revealImage(event) {
+    if (!animateNextImage.current) return
+    animateNextImage.current = false
+    if (window.matchMedia?.(motionAllowed).matches) fadeImage(event.currentTarget)
+  }
 
   return (
     <div className="product-gallery" role="group" aria-label={`Imágenes de ${product.nombre}`}>
-      <div className="detail-main-image">
+      <div className="detail-main-image" ref={mainImageRef}>
         <ImageWithFallback
           src={selectedImage ? publicAsset(selectedImage) : undefined}
           alt={galleryImages.length > 1 ? `${product.nombre} — vista ${selectedIndex + 1}` : product.nombre}
+          onLoad={revealImage}
         />
       </div>
       {galleryImages.length > 0 && (
@@ -36,7 +63,7 @@ export default function ProductGallery({ product }) {
                 className={`detail-thumbnail${selectedIndex === index ? ' is-selected' : ''}`}
                 aria-label={`Ver imagen ${index + 1} de ${product.nombre}`}
                 aria-pressed={selectedIndex === index}
-                onClick={() => setSelectedIndex(index)}
+                onClick={() => selectImage(index)}
               >
                 <ImageWithFallback
                   src={publicAsset(path)}

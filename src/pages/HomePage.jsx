@@ -1,3 +1,4 @@
+import { useRef } from 'react'
 import { Link } from 'react-router-dom'
 import ProductCard from '../components/store/ProductCard'
 import ProductCarousel from '../components/store/ProductCarousel'
@@ -5,6 +6,7 @@ import ImageWithFallback from '../components/common/ImageWithFallback'
 import { CATALOG_CATEGORIES } from '../config/catalogCategories'
 import { useCatalogProducts } from '../hooks/useCatalogProducts'
 import { publicAsset } from '../utils/assets'
+import { gsap, motionAllowed, ScrollTrigger, useGSAP } from '../utils/storeAnimations'
 
 const FEATURED_PRODUCT_IDS = [1, 2, 3, 4, 5, 6, 7, 8]
 const categoryIcons = {
@@ -22,6 +24,8 @@ const socialReferences = [
 ]
 
 export default function HomePage() {
+  const homeRef = useRef(null)
+  const featuredRef = useRef(null)
   const { products, loading, error } = useCatalogProducts()
   const featuredProducts = FEATURED_PRODUCT_IDS
     .map(id => products.find(product => product.id === id))
@@ -29,8 +33,77 @@ export default function HomePage() {
   // El carrusel muestra solo lo que se puede comprar ahora (con stock).
   const availableProducts = products.filter(product => product.stock > 0)
 
+  useGSAP(() => {
+    const media = gsap.matchMedia(homeRef)
+
+    media.add(motionAllowed, () => {
+      gsap.timeline({ defaults: { duration: 0.55, ease: 'power2.out' } })
+        .from('.home-welcome h1', { y: 20, opacity: 0 })
+        .from('.home-welcome p, .home-welcome .primary-btn', {
+          y: 14,
+          opacity: 0.5,
+          stagger: 0.08,
+        }, '-=0.35')
+        .from('.home-welcome-image', { y: 18, opacity: 0.4 }, 0.15)
+
+      gsap.from('.home-categories li', {
+        y: 18,
+        opacity: 0.55,
+        duration: 0.45,
+        stagger: 0.08,
+        ease: 'power2.out',
+        scrollTrigger: {
+          trigger: '.home-categories',
+          start: 'top 85%',
+          once: true,
+        },
+      })
+    })
+
+    media.add(`${motionAllowed} and (min-width: 768px)`, () => {
+      gsap.fromTo('.home-editorial-banner > img', { yPercent: -3, scale: 1.08 }, {
+        yPercent: 3,
+        scale: 1.08,
+        ease: 'none',
+        scrollTrigger: {
+          trigger: '.home-editorial-banner',
+          start: 'top bottom',
+          end: 'bottom top',
+          scrub: true,
+        },
+      })
+    })
+
+    return () => media.revert()
+  }, { scope: homeRef })
+
+  useGSAP(() => {
+    const grid = featuredRef.current
+    // El carrusel cambia la posición de las secciones al terminar la carga.
+    if (!loading) ScrollTrigger.refresh(true)
+    if (!grid) return
+
+    const media = gsap.matchMedia()
+    media.add(motionAllowed, () => {
+      gsap.from(grid.children, {
+        y: 20,
+        opacity: 0.55,
+        duration: 0.45,
+        stagger: 0.07,
+        ease: 'power2.out',
+        scrollTrigger: {
+          trigger: grid,
+          start: 'top 88%',
+          once: true,
+        },
+      })
+    })
+
+    return () => media.revert()
+  }, { scope: homeRef, dependencies: [products, loading, error], revertOnUpdate: true })
+
   return (
-    <div className="home-page">
+    <div className="home-page" ref={homeRef}>
       <title>Bienvenido a CheckPoint Store — CheckPoint Store</title>
       <section className="section home-welcome" aria-labelledby="home-title">
         <div className="container">
@@ -93,7 +166,7 @@ export default function HomePage() {
           ) : featuredProducts.length === 0 ? (
             <p className="catalog-state" role="status">No hay productos destacados disponibles.</p>
           ) : (
-            <div className="row g-4">
+            <div className="row g-4" ref={featuredRef}>
               {featuredProducts.map(product => (
                 <div className="col-12 col-sm-6 col-lg-3" key={product.id}>
                   <ProductCard product={product} />

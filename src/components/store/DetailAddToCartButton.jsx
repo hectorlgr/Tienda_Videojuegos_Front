@@ -1,11 +1,25 @@
 import { useEffect, useRef, useState } from 'react'
 import { useCart } from '../../hooks/useCart'
+import { gsap, motionAllowed, useGSAP } from '../../utils/storeAnimations'
 
 export default function DetailAddToCartButton({ productId, quantity, available }) {
   const { addItem } = useCart()
   const [status, setStatus] = useState('idle')
   const pending = useRef(false)
   const mounted = useRef(false)
+  const buttonRef = useRef(null)
+
+  useGSAP(() => {
+    if (status !== 'success' || !window.matchMedia?.(motionAllowed).matches) return
+
+    gsap.to(buttonRef.current, {
+      scale: 1.04,
+      duration: 0.15,
+      ease: 'power2.inOut',
+      repeat: 1,
+      yoyo: true,
+    })
+  }, { dependencies: [status], revertOnUpdate: true })
 
   useEffect(() => {
     mounted.current = true
@@ -37,6 +51,7 @@ export default function DetailAddToCartButton({ productId, quantity, available }
   return (
     <div className="mt-3">
       <button
+        ref={buttonRef}
         type="button"
         className="primary-btn detail-add-to-cart"
         disabled={!available || adding}
