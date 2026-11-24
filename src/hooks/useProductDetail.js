@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import { getProductById } from '../services/productService.js'
-import { getInventoryByProductId, InventoryNotFoundError } from '../services/inventoryService.js'
 import { assertNumericId } from '../utils/ids.js'
 
 function initialDetail(productId) {
@@ -31,23 +30,11 @@ export function useProductDetail(productId) {
 
     async function loadDetail() {
       try {
-        const [product, inventory] = await Promise.all([
-          getProductById(productId),
-          getInventoryByProductId(productId).catch(error => {
-            if (error instanceof InventoryNotFoundError) return null
-            throw error
-          }),
-        ])
-
+        const product = await getProductById(productId)
         if (!active) return
-
         setDetail({
           productId,
-          product: {
-            ...product,
-            stock: inventory?.stock ?? 0,
-            stockCritico: inventory?.stockCritico ?? null,
-          },
+          product,
           loading: false,
           error: null,
         })

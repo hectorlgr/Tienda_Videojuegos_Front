@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import { getProducts } from '../services/productService.js'
-import { getInventory } from '../services/inventoryService.js'
 
 export function useCatalogProducts() {
   const [catalog, setCatalog] = useState({
@@ -14,27 +13,9 @@ export function useCatalogProducts() {
 
     async function loadCatalog() {
       try {
-        const [products, inventory] = await Promise.all([
-          getProducts(),
-          getInventory(),
-        ])
-
+        const products = await getProducts()
         if (!active) return
-
-        const inventoryByProductId = new Map(
-          inventory.map(record => [record.productoId, record]),
-        )
-        const catalogProducts = products.map(product => {
-          const record = inventoryByProductId.get(product.id)
-
-          return {
-            ...product,
-            stock: record?.stock ?? 0,
-            stockCritico: record?.stockCritico ?? null,
-          }
-        })
-
-        setCatalog({ products: catalogProducts, loading: false, error: null })
+        setCatalog({ products, loading: false, error: null })
       } catch (error) {
         if (!active) return
 

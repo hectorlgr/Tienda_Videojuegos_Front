@@ -1,5 +1,6 @@
 // Sesión académica: JSON Server no es un sistema de autenticación real.
-const SESSION_STORAGE_KEY = 'usuarioActivo'
+const SESSION_STORAGE_KEY = 'checkpoint.jwt'
+let accessToken = null
 const VALID_ROLES = ['cliente', 'vendedor', 'administrador']
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
 const OPTIONAL_FIELDS = ['run', 'nombre', 'apellidos', 'direccion', 'region', 'comuna']
@@ -21,44 +22,50 @@ export function sanitizeSessionUser(user) {
   return sessionUser
 }
 
-export function readSession() {
+export function userFromToken(token) {
   try {
-    const stored = sessionStorage.getItem(SESSION_STORAGE_KEY)
-    if (stored === null) return null
-
-    let parsed = null
-    try {
-      parsed = JSON.parse(stored)
-    } catch {
-      // JSON corrupto: se trata igual que una sesión inválida.
-    }
-    const sessionUser = sanitizeSessionUser(parsed)
-    if (sessionUser === null) {
-      sessionStorage.removeItem(SESSION_STORAGE_KEY)
-      return null
-    }
-    // Reescribe la sesión si contenía campos extra (por ejemplo, password).
-    const serialized = JSON.stringify(sessionUser)
-    if (serialized !== stored) sessionStorage.setItem(SESSION_STORAGE_KEY, serialized)
-    return sessionUser
+    if (typeof token !== 'string' || token.split('.').length !== 3) return null
+    const payload = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')
+    const bytes = Uint8Array.from(atob(payload), character => character.charCodeAt(0))
+    const claims = JSON.parse(new TextDecoder().decode(bytes))
+    if (!Number.isFinite(claims.exp) || claims.exp <= Date.now() / 1000) return null
+    return sanitizeSessionUser({
+      id: claims.userId,
+      correo: claims.sub,
+      rol: typeof claims.role === 'string' ? claims.role.toLowerCase() : '',
+    })
   } catch {
-    // Sin acceso al almacenamiento no hay sesión que restaurar.
     return null
   }
 }
 
-export function persistSession(sessionUser) {
+export function readAccessToken() {
+  if (accessToken) return accessToken
   try {
-    sessionStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(sessionUser))
+    return sessionStorage.getItem(SESSION_STORAGE_KEY)
   } catch {
-    // La sesión se mantiene en memoria durante la ejecución actual.
+    return null
+  }
+}
+
+export function readSession() {
+  return userFromToken(readAccessToken())
+}
+
+export function persistSession(token) {
+  accessToken = token
+  try {
+    sessionStorage.setItem(SESSION_STORAGE_KEY, token)
+  } catch {
+    // La sesión sigue disponible en memoria.
   }
 }
 
 export function clearSession() {
+  accessToken = null
   try {
     sessionStorage.removeItem(SESSION_STORAGE_KEY)
   } catch {
-    // Si el almacenamiento está bloqueado no quedó nada persistido que borrar.
+    // El almacenamiento puede estar bloqueado.
   }
 }

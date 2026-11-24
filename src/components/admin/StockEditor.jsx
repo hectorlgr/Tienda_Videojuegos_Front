@@ -35,7 +35,7 @@ export default function StockEditor({ inventoryId, productName, stock, onUpdated
     setSuccess(false)
 
     try {
-      const updatedInventory = await updateInventoryStock(inventoryId, nextStock)
+      const updatedInventory = await updateInventoryStock(inventoryId, nextStock, stock)
       if (!activeRef.current) return
 
       onUpdated(inventoryId, updatedInventory)

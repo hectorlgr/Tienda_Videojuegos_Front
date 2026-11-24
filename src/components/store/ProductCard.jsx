@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useCart } from '../../hooks/useCart'
 import ImageWithFallback from '../common/ImageWithFallback'
+import RawgAttribution from '../common/RawgAttribution'
 import { publicAsset } from '../../utils/assets'
 import { getDiscountPercent, hasValidOffer } from '../../utils/pricing'
 import ProductPrice from './ProductPrice'
@@ -61,6 +62,7 @@ export default function ProductCard({ product }) {
       <div className="product-body">
         <p className="product-category">{categoryLabels[product.categoria] ?? product.categoria}</p>
         <h2 className="product-name"><Link to={productUrl}>{product.nombre}</Link></h2>
+        {product.rawgId != null && <RawgAttribution />}
         <ProductPrice product={product} />
         <p className={`product-stock ${available ? 'is-available' : 'is-unavailable'}`}>
           {available ? 'Disponible' : 'Agotado'}

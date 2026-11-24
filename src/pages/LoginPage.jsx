@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
-import { findUserByEmail } from '../services/userService'
+import { postJson } from '../services/httpClient'
 
 // El vendedor solo tiene acceso a Órdenes; el administrador comienza en el Dashboard.
 const HOME_BY_ROLE = {
@@ -36,38 +36,16 @@ export default function LoginPage() {
     setSubmitting(true)
     setError('')
 
-    let user
     try {
-      user = await findUserByEmail(email)
-    } catch {
-      // Servidor apagado, error HTTP o JSON inválido: no son credenciales incorrectas.
-      setError(LOGIN_FAILED)
+      const data = await postJson('/auth/login', { email: email.trim(), password })
+      const user = login(data?.token)
+      navigate(HOME_BY_ROLE[user.rol], { replace: true })
+    } catch (failure) {
+      setError(failure.status === 401 ? INVALID_CREDENTIALS : LOGIN_FAILED)
+    } finally {
       submittingRef.current = false
       setSubmitting(false)
-      return
     }
-
-    // Proyecto académico: JSON Server guarda la contraseña en texto plano.
-    if (user === null || user.password !== password) {
-      setError(INVALID_CREDENTIALS)
-      submittingRef.current = false
-      setSubmitting(false)
-      return
-    }
-
-    const home = Object.hasOwn(HOME_BY_ROLE, user.rol) ? HOME_BY_ROLE[user.rol] : null
-    try {
-      if (home === null) throw new TypeError('Rol de usuario inesperado.')
-      // login() sanitiza el usuario y excluye password antes de guardar la sesión.
-      login(user)
-    } catch {
-      setError(LOGIN_FAILED)
-      submittingRef.current = false
-      setSubmitting(false)
-      return
-    }
-
-    navigate(home, { replace: true })
   }
 
   return (

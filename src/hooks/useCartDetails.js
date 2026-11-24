@@ -1,10 +1,9 @@
 import { useEffect, useState } from 'react'
 import { useCart } from './useCart'
 import { getProducts } from '../services/productService'
-import { getInventory } from '../services/inventoryService'
 
 function initialData(hasItems) {
-  return { hasItems, products: new Map(), inventory: new Map(), loading: hasItems, error: null }
+  return { hasItems, products: new Map(), loading: hasItems, error: null }
 }
 
 export function useCartDetails() {
@@ -18,12 +17,11 @@ export function useCartDetails() {
 
     async function loadData() {
       try {
-        const [products, inventory] = await Promise.all([getProducts(), getInventory()])
+        const products = await getProducts()
         if (!active) return
         setData({
           hasItems: true,
           products: new Map(products.map(product => [product.id, product])),
-          inventory: new Map(inventory.map(record => [record.productoId, record])),
           loading: false,
           error: null,
         })
@@ -50,13 +48,12 @@ export function useCartDetails() {
   // Las cantidades y el orden siempre proceden del Context, nunca de una copia remota.
   const lines = items.map(({ productoId, cantidad }) => {
     const product = data.products.get(productoId) ?? null
-    const inventory = product ? data.inventory.get(productoId) : null
     return {
       productoId,
       cantidad,
       product,
-      stock: inventory?.stock ?? 0,
-      stockCritico: inventory?.stockCritico ?? null,
+      stock: product?.stock ?? 0,
+      stockCritico: product?.stockCritico ?? null,
     }
   })
 

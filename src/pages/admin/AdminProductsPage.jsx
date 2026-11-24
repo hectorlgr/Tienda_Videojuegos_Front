@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import ImageWithFallback from '../../components/common/ImageWithFallback'
+import RawgAttribution from '../../components/common/RawgAttribution'
 import { CATALOG_CATEGORIES } from '../../config/catalogCategories'
 import { STORE_ECOSYSTEMS } from '../../config/storeEcosystems'
 import { useAdminStock } from '../../hooks/useAdminStock'
@@ -14,7 +15,6 @@ function displayValue(value) {
   return value == null || value === '' ? '—' : value
 }
 
-// Vista de solo lectura: reutiliza la unión productos + inventario de Stock sin editarla.
 export default function AdminProductsPage() {
   const { rows, loading, error } = useAdminStock()
 
@@ -78,7 +78,10 @@ export default function AdminProductsPage() {
                         />
                       </td>
                       <td className="text-nowrap">{displayValue(product.codigo)}</td>
-                      <th scope="row">{displayValue(product.nombre)}</th>
+                      <th scope="row">
+                        {displayValue(product.nombre)}
+                        {product.rawgId != null && <div><RawgAttribution /></div>}
+                      </th>
                       <td>{categoryLabels.get(product.categoria) ?? displayValue(product.categoria)}</td>
                       <td>{ecosystemLabels.get(product.ecosistema) ?? displayValue(product.ecosistema)}</td>
                       <td className="text-end text-nowrap">
@@ -87,8 +90,8 @@ export default function AdminProductsPage() {
                       <td>{product.enOferta === true ? <span className="badge text-bg-warning">Oferta</span> : '—'}</td>
                       <td className="text-end">{stock}</td>
                       <td>
-                        <span className={`badge ${stock > 0 ? 'text-bg-success' : 'text-bg-secondary'}`}>
-                          {stock > 0 ? 'Disponible' : 'Agotado'}
+                        <span className={`badge ${product.habilitado !== false && stock > 0 ? 'text-bg-success' : 'text-bg-secondary'}`}>
+                          {product.habilitado === false ? 'Deshabilitado' : stock > 0 ? 'Disponible' : 'Agotado'}
                         </span>
                       </td>
                       <td>

@@ -1,14 +1,13 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { CATALOG_CATEGORIES } from '../../config/catalogCategories'
-import { calculateOfferPrice, DEFAULT_PRODUCT_ECOSYSTEM, getCategoryFields, OFFER_PERCENTAGES } from '../../config/productForm'
+import { calculateOfferPrice, getCategoryFields, OFFER_PERCENTAGES } from '../../config/productForm'
 import { formatCLP } from '../../utils/currency'
-import { getRawgPlatformNames } from '../../services/rawgService'
+import { getRawgGame, importRawgGame } from '../../services/rawgService'
 import RawgGameSearch from '../../components/admin/RawgGameSearch'
 import ProductImageFields from '../../components/admin/ProductImageFields'
 import { normalizeProductCode, validateProductForm } from '../../utils/productValidation'
-import { findProductByCode } from '../../services/productService'
-import { createProductWithInventory, ProductInventoryCreationError } from '../../services/productCreationService'
+import { createProduct } from '../../services/productService'
 
 const initialValues = {
   product: {
@@ -37,32 +36,39 @@ export default function AdminProductCreatePage() {
   const [errors, setErrors] = useState({})
   const [submitted, setSubmitted] = useState(false)
   const [phase, setPhase] = useState('idle')
-  const [codeError, setCodeError] = useState('')
+  const [rawgGame, setRawgGame] = useState(null)
+  const [rawgPreview, setRawgPreview] = useState(null)
   const [submitError, setSubmitError] = useState('')
   const [success, setSuccess] = useState('')
   const [formVersion, setFormVersion] = useState(0)
   const [readingImages, setReadingImages] = useState(false)
   const readingImagesRef = useRef(false)
   const pending = phase !== 'idle' || readingImages
-  const categoryFields = getCategoryFields(values.product.categoria)
+  const categoryFields = getCategoryFields(values.product.categoria, rawgGame !== null)
   const price = Number(values.product.precio)
   const offerPrice = calculateOfferPrice(price, Number(values.product.porcentajeOferta))
   const pendingRef = useRef(false)
   const activeRef = useRef(false)
-  const currentCodeRef = useRef('')
-  const visibleErrors = { ...errors, ...(codeError ? { codigo: codeError } : {}) }
+  const visibleErrors = errors
 
   useEffect(() => {
     activeRef.current = true
     return () => { activeRef.current = false }
   }, [])
 
+  const rawgId = rawgGame?.rawgId
+  useEffect(() => {
+    if (!rawgId) return
+    let active = true
+    getRawgGame(rawgId).then(
+      game => { if (active) setRawgPreview({ rawgId, game }) },
+      error => { if (active) setRawgPreview({ rawgId, error: error.message }) },
+    )
+    return () => { active = false }
+  }, [rawgId])
+  const preview = rawgId === rawgPreview?.rawgId ? rawgPreview : null
+
   function changeValue(group, name, value) {
-    if (name === 'codigo') {
-      const code = normalizeProductCode(value)
-      if (code !== currentCodeRef.current) setCodeError('')
-      currentCodeRef.current = code
-    }
     const nextGroup = { ...values[group], [name]: value }
     if (name === 'categoria') {
       const visible = getCategoryFields(value)
@@ -70,28 +76,32 @@ export default function AdminProductCreatePage() {
         if (!visible.some(nextField => nextField.name === field.name)) delete nextGroup[field.name]
       }
     }
-    updateValues({ ...values, [group]: nextGroup })
+    if (name === 'imagen') nextGroup.imagenes = nextGroup.imagenes.filter(url => url !== value)
+    updateValues({ ...values, [group]: nextGroup }, name === 'categoria' ? null : rawgGame)
   }
 
-  function updateValues(next) {
+  function updateValues(next, selectedGame = rawgGame) {
     setSubmitError('')
     setValues(next)
-    if (submitted) setErrors(validateProductForm(next))
+    if (submitted) setErrors(validateProductForm(next, selectedGame))
   }
 
-  function importGame(game) {
+  function selectRawgGame(game) {
+    setRawgGame(game)
     updateValues({
       ...values,
       product: {
         ...values.product,
-        nombre: game.name.slice(0, 100),
-        descripcionCorta: game.description_raw.slice(0, 120),
-        descripcionLarga: game.description_raw.slice(0, 500),
-        plataforma: getRawgPlatformNames(game),
-        imagen: game.background_image,
-        franquicia: game.franchise ?? '',
+        plataforma: game.plataformas?.includes(values.product.plataforma)
+          ? values.product.plataforma
+          : game.plataformas?.length === 1 ? game.plataformas[0] : '',
       },
-    })
+    }, game)
+  }
+
+  function useManualMode() {
+    setRawgGame(null)
+    updateValues(values, null)
   }
 
   function changeReadingImages(reading) {
@@ -116,68 +126,33 @@ export default function AdminProductCreatePage() {
     }
     setValues(next)
     setSubmitted(true)
-    const localErrors = validateProductForm(next)
+    const localErrors = validateProductForm(next, rawgGame)
     setErrors(localErrors)
-    setCodeError('')
     setSubmitError('')
     if (Object.keys(localErrors).length > 0) return
 
-    const code = next.product.codigo
-    currentCodeRef.current = code
     pendingRef.current = true
-    setPhase('checking')
+    setPhase('creating')
     try {
-      const product = await findProductByCode(code)
-      // Una respuesta tardía no corresponde a un código editado ni a una página desmontada.
-      if (!activeRef.current || currentCodeRef.current !== code) return
-      if (product) {
-        setCodeError('Este código ya está registrado.')
-        return
+      const productData = { ...next.product, precioOferta: offerPrice }
+      if (rawgGame) {
+        await importRawgGame(rawgGame.rawgId, productData, next.inventory)
+      } else {
+        await createProduct(productData, next.inventory)
       }
-
-      const productData = {
-        codigo: code,
-        nombre: next.product.nombre,
-        categoria: next.product.categoria,
-        ecosistema: next.product.categoria === 'figura'
-          ? DEFAULT_PRODUCT_ECOSYSTEM
-          : next.product.ecosistema || DEFAULT_PRODUCT_ECOSYSTEM,
-        enOferta: next.product.enOferta,
-        precio: Number(next.product.precio),
-        // Sin oferta marcada, el precio de oferta no se guarda.
-        precioOferta: next.product.enOferta ? calculateOfferPrice(Number(next.product.precio), Number(next.product.porcentajeOferta)) : null,
-        imagen: next.product.imagen,
-        imagenes: next.product.imagenes,
-        descripcionCorta: next.product.descripcionCorta,
-        descripcionLarga: next.product.descripcionLarga,
-        ...Object.fromEntries(categoryFields
-          .filter(field => field.name !== 'ecosistema' && next.product[field.name])
-          .map(field => [field.name, next.product[field.name]])),
-      }
-      const inventoryData = {
-        stock: Number(next.inventory.stock),
-        stockCritico: next.inventory.stockCritico === '' ? null : Number(next.inventory.stockCritico),
-      }
-
-      setPhase('creating')
-      await createProductWithInventory(productData, inventoryData)
       if (!activeRef.current) return
       if (addAnother) {
         setValues({ ...initialValues, product: { ...initialValues.product, categoria: next.product.categoria } })
         setErrors({})
         setSubmitted(false)
-        currentCodeRef.current = ''
+        setRawgGame(null)
         setFormVersion(version => version + 1)
-        setSuccess(`Se creó ${next.product.nombre} con su inventario inicial.`)
+        setSuccess(`Se creó ${rawgGame?.nombre ?? next.product.nombre} con su inventario inicial.`)
       } else {
         navigate('/admin/stock', { replace: true })
       }
     } catch (error) {
-      if (activeRef.current) {
-        setSubmitError(error instanceof ProductInventoryCreationError
-          ? 'El producto fue creado, pero no fue posible registrar su inventario.'
-          : 'No fue posible crear el producto. Inténtalo nuevamente.')
-      }
+      if (activeRef.current) setSubmitError(error.message || 'No fue posible crear el producto.')
     } finally {
       pendingRef.current = false
       if (activeRef.current) setPhase('idle')
@@ -247,10 +222,29 @@ export default function AdminProductCreatePage() {
                 <div className="row g-3 mb-3">
                   {renderField('product', { name: 'categoria', label: 'Categoría', required: true, options: CATALOG_CATEGORIES })}
                 </div>
-                {values.product.categoria === 'juego' && <RawgGameSearch key={formVersion} onSelect={importGame} />}
+                {values.product.categoria === 'juego' && <RawgGameSearch key={formVersion} onSelect={selectRawgGame} />}
+                {rawgGame && (
+                  <div className="alert alert-info">
+                    <div className="d-flex flex-wrap align-items-center justify-content-between gap-2">
+                      <span>Importar <strong>{rawgGame.nombre}</strong>. Elige una plataforma y un formato para esta variante.</span>
+                      <button type="button" className="btn btn-sm btn-outline-secondary" onClick={useManualMode}>
+                        Volver al modo manual
+                      </button>
+                    </div>
+                    {preview?.game?.descripcion && <p className="mt-2 mb-1">{preview.game.descripcion}</p>}
+                    {preview?.game?.generos?.length > 0 && <p className="small mb-1">Géneros {preview.game.generos.join(', ')}</p>}
+                    {rawgGame.plataformas?.length > 0 && <p className="small mb-0">Plataformas {rawgGame.plataformas.join(', ')}</p>}
+                    {preview?.error && <p className="small mb-0" role="status">{preview.error}</p>}
+                  </div>
+                )}
                 <div className="row g-3">
-                  {productFields.map(field => renderField('product', field))}
-                  {categoryFields.map(field => renderField('product', field))}
+                  {productFields.filter(field => !rawgGame || ['codigo', 'precio'].includes(field.name))
+                    .map(field => renderField('product', field))}
+                  {categoryFields.map(field => renderField('product',
+                    rawgGame && field.name === 'plataforma'
+                      ? { ...field, options: rawgGame.plataformas?.map(name => ({ value: name, label: name })) }
+                      : field,
+                  ))}
                 </div>
                 <div className="form-check mt-3">
                   <input
@@ -284,15 +278,17 @@ export default function AdminProductCreatePage() {
                   </div>
                 )}
               </fieldset>
-              <ProductImageFields key={formVersion} cover={values.product.imagen} gallery={values.product.imagenes}
-                disabled={pending} onChange={(name, value) => changeValue('product', name, value)}
-                onReadingChange={changeReadingImages} />
+              {!rawgGame && (
+                <ProductImageFields key={formVersion} cover={values.product.imagen} gallery={values.product.imagenes}
+                  disabled={pending} onChange={(name, value) => changeValue('product', name, value)}
+                  onReadingChange={changeReadingImages} />
+              )}
               <fieldset className="mb-4" disabled={pending}>
                 <legend className="fs-5 fw-semibold">Inventario</legend>
                 <div className="row g-3">{inventoryFields.map(field => renderField('inventory', field))}</div>
               </fieldset>
               <p className="text-muted" role="status">
-                {phase === 'checking' ? 'Comprobando código...' : phase === 'creating' ? 'Creando producto e inventario...' : readingImages ? 'Preparando im?genes...' : ''}
+                {phase === 'creating' ? 'Guardando producto...' : readingImages ? 'Subiendo imágenes...' : ''}
               </p>
               <div className="d-grid d-sm-flex gap-2">
                 <button type="submit" className="btn btn-dark py-2" disabled={pending}>Crear producto</button>

@@ -22,11 +22,11 @@ const categoryFields = {
   figura: [{ ...franchise, required: true }],
 }
 
-export const DEFAULT_PRODUCT_ECOSYSTEM = 'otros'
 export const OFFER_PERCENTAGES = [5, 10, 15, 20, 25, 30, 40, 50, 60, 70, 80, 90]
 
-export function getCategoryFields(category) {
-  return Object.hasOwn(categoryFields, category) ? categoryFields[category] : []
+export function getCategoryFields(category, importing = false) {
+  const fields = Object.hasOwn(categoryFields, category) ? categoryFields[category] : []
+  return importing ? fields.filter(field => field.name === 'plataforma' || field.name === 'formato') : fields
 }
 
 export function calculateOfferPrice(price, percentage) {

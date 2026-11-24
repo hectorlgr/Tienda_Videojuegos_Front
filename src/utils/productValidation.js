@@ -10,25 +10,28 @@ function validInteger(value, minimum) {
   return value.trim() !== '' && Number.isSafeInteger(number) && number >= minimum
 }
 
-export function validateProductForm({ product, inventory }) {
+export function validateProductForm({ product, inventory }, rawgGame = null) {
   const errors = {}
   const code = normalizeProductCode(product.codigo)
   if (!code) errors.codigo = 'El código es obligatorio.'
   else if (code.length < 3) errors.codigo = 'El código debe tener al menos 3 caracteres.'
 
-  if (!product.nombre.trim()) errors.nombre = 'El nombre es obligatorio.'
-  else if (product.nombre.trim().length > 100) errors.nombre = 'Máximo 100 caracteres.'
+  if (!rawgGame && !product.nombre.trim()) errors.nombre = 'El nombre es obligatorio.'
+  else if (!rawgGame && product.nombre.trim().length > 100) errors.nombre = 'Máximo 100 caracteres.'
 
   if (!CATALOG_CATEGORIES.some(category => category.value === product.categoria)) {
     errors.categoria = 'Selecciona una categoría válida.'
   }
-  for (const field of getCategoryFields(product.categoria)) {
+  for (const field of getCategoryFields(product.categoria, rawgGame !== null)) {
     const value = product[field.name]?.trim() ?? ''
     if (!value && field.required) {
       errors[field.name] = field.options ? 'Selecciona una opción.' : 'Completa este campo.'
     } else if (value && field.options && !field.options.some(option => option.value === value)) {
       errors[field.name] = 'Selecciona una opción válida.'
     }
+  }
+  if (rawgGame?.plataformas?.length && product.plataforma && !rawgGame.plataformas.includes(product.plataforma.trim())) {
+    errors.plataforma = 'Selecciona una plataforma de este juego.'
   }
   if (!validInteger(product.precio, 1)) {
     errors.precio = 'Ingresa un precio entero seguro mayor que 0.'

@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import ProductGallery from '../components/store/ProductGallery'
+import RawgAttribution from '../components/common/RawgAttribution'
 import QuantitySelector from '../components/store/QuantitySelector'
 import DetailAddToCartButton from '../components/store/DetailAddToCartButton'
 import { useProductDetail } from '../hooks/useProductDetail'
@@ -83,6 +84,7 @@ export default function ProductDetailPage() {
           <div className="row gy-4">
             <div className="col-md-5">
               <ProductGallery key={product.id} product={product} />
+              {product.rawgId != null && <RawgAttribution />}
             </div>
             <div className="col-md-7">
               <div className="product-details">
