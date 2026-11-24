@@ -1,16 +1,19 @@
 import { useEffect, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { CATALOG_CATEGORIES } from '../../config/catalogCategories'
-import { STORE_ECOSYSTEMS } from '../../config/storeEcosystems'
+import { calculateOfferPrice, DEFAULT_PRODUCT_ECOSYSTEM, getCategoryFields, OFFER_PERCENTAGES } from '../../config/productForm'
+import { formatCLP } from '../../utils/currency'
+import { getRawgPlatformNames } from '../../services/rawgService'
+import RawgGameSearch from '../../components/admin/RawgGameSearch'
+import ProductImageFields from '../../components/admin/ProductImageFields'
 import { normalizeProductCode, validateProductForm } from '../../utils/productValidation'
 import { findProductByCode } from '../../services/productService'
 import { createProductWithInventory, ProductInventoryCreationError } from '../../services/productCreationService'
 
 const initialValues = {
   product: {
-    codigo: '', nombre: '', categoria: '', precio: '', precioOferta: '', imagen: '', imagenes: '',
-    descripcionCorta: '', descripcionLarga: '', formato: '', plataforma: '',
-    compatibilidad: '', franquicia: '', ecosistema: '', enOferta: false,
+    codigo: '', nombre: '', categoria: '', precio: '', porcentajeOferta: '', imagen: '', imagenes: [],
+    descripcionCorta: '', descripcionLarga: '', enOferta: false,
   },
   inventory: { stock: '', stockCritico: '' },
 }
@@ -18,18 +21,9 @@ const initialValues = {
 const productFields = [
   { name: 'codigo', label: 'Código comercial', required: true, help: 'Mínimo 3 caracteres. Se normaliza a mayúsculas al salir del campo o validar.' },
   { name: 'nombre', label: 'Nombre', required: true, maxLength: 100 },
-  { name: 'categoria', label: 'Categoría', required: true, options: CATALOG_CATEGORIES },
-  { name: 'ecosistema', label: 'Ecosistema', required: true, options: STORE_ECOSYSTEMS },
   { name: 'precio', label: 'Precio (CLP)', type: 'number', min: 1, required: true },
-  { name: 'precioOferta', label: 'Precio de oferta (CLP)', type: 'number', min: 1, help: 'Obligatorio si marcas "Producto en oferta". Debe ser menor que el precio normal.' },
   { name: 'descripcionCorta', label: 'Descripción corta', multiline: true, maxLength: 120 },
   { name: 'descripcionLarga', label: 'Descripción larga', multiline: true, maxLength: 500 },
-  { name: 'imagen', label: 'Ruta de imagen principal', help: 'Ruta relativa a public, por ejemplo img/cara_elden_ring.jpg. Puede quedar vacía; la tienda dispone de imagen de respaldo.' },
-  { name: 'imagenes', label: 'Rutas de la galería', multiline: true, help: 'Una ruta relativa a public por línea. No se cargan ni se previsualizan archivos.' },
-  { name: 'formato', label: 'Formato', options: [{ value: 'fisico', label: 'Físico' }, { value: 'digital', label: 'Digital' }] },
-  { name: 'plataforma', label: 'Plataforma' },
-  { name: 'compatibilidad', label: 'Compatibilidad' },
-  { name: 'franquicia', label: 'Franquicia' },
 ]
 
 const inventoryFields = [
@@ -45,7 +39,14 @@ export default function AdminProductCreatePage() {
   const [phase, setPhase] = useState('idle')
   const [codeError, setCodeError] = useState('')
   const [submitError, setSubmitError] = useState('')
-  const pending = phase !== 'idle'
+  const [success, setSuccess] = useState('')
+  const [formVersion, setFormVersion] = useState(0)
+  const [readingImages, setReadingImages] = useState(false)
+  const readingImagesRef = useRef(false)
+  const pending = phase !== 'idle' || readingImages
+  const categoryFields = getCategoryFields(values.product.categoria)
+  const price = Number(values.product.precio)
+  const offerPrice = calculateOfferPrice(price, Number(values.product.porcentajeOferta))
   const pendingRef = useRef(false)
   const activeRef = useRef(false)
   const currentCodeRef = useRef('')
@@ -62,15 +63,47 @@ export default function AdminProductCreatePage() {
       if (code !== currentCodeRef.current) setCodeError('')
       currentCodeRef.current = code
     }
+    const nextGroup = { ...values[group], [name]: value }
+    if (name === 'categoria') {
+      const visible = getCategoryFields(value)
+      for (const field of categoryFields) {
+        if (!visible.some(nextField => nextField.name === field.name)) delete nextGroup[field.name]
+      }
+    }
+    updateValues({ ...values, [group]: nextGroup })
+  }
+
+  function updateValues(next) {
     setSubmitError('')
-    const next = { ...values, [group]: { ...values[group], [name]: value } }
     setValues(next)
     if (submitted) setErrors(validateProductForm(next))
   }
 
+  function importGame(game) {
+    updateValues({
+      ...values,
+      product: {
+        ...values.product,
+        nombre: game.name.slice(0, 100),
+        descripcionCorta: game.description_raw.slice(0, 120),
+        descripcionLarga: game.description_raw.slice(0, 500),
+        plataforma: getRawgPlatformNames(game),
+        imagen: game.background_image,
+        franquicia: game.franchise ?? '',
+      },
+    })
+  }
+
+  function changeReadingImages(reading) {
+    readingImagesRef.current = reading
+    setReadingImages(reading)
+  }
+
   async function handleSubmit(event) {
     event.preventDefault()
-    if (pendingRef.current) return
+    if (pendingRef.current || readingImagesRef.current) return
+    const addAnother = event.nativeEvent.submitter?.value === 'add-another'
+    setSuccess('')
     const next = {
       product: {
         ...Object.fromEntries(Object.entries(values.product).map(([name, value]) => [name, typeof value === 'string' ? value.trim() : value])),
@@ -106,19 +139,20 @@ export default function AdminProductCreatePage() {
         codigo: code,
         nombre: next.product.nombre,
         categoria: next.product.categoria,
-        ecosistema: next.product.ecosistema,
+        ecosistema: next.product.categoria === 'figura'
+          ? DEFAULT_PRODUCT_ECOSYSTEM
+          : next.product.ecosistema || DEFAULT_PRODUCT_ECOSYSTEM,
         enOferta: next.product.enOferta,
         precio: Number(next.product.precio),
         // Sin oferta marcada, el precio de oferta no se guarda.
-        precioOferta: next.product.enOferta ? Number(next.product.precioOferta) : null,
+        precioOferta: next.product.enOferta ? calculateOfferPrice(Number(next.product.precio), Number(next.product.porcentajeOferta)) : null,
         imagen: next.product.imagen,
-        imagenes: next.product.imagenes.split(/\r?\n/).map(line => line.trim()).filter(Boolean),
+        imagenes: next.product.imagenes,
         descripcionCorta: next.product.descripcionCorta,
         descripcionLarga: next.product.descripcionLarga,
-        formato: next.product.formato,
-        plataforma: next.product.plataforma,
-        compatibilidad: next.product.compatibilidad,
-        franquicia: next.product.franquicia,
+        ...Object.fromEntries(categoryFields
+          .filter(field => field.name !== 'ecosistema' && next.product[field.name])
+          .map(field => [field.name, next.product[field.name]])),
       }
       const inventoryData = {
         stock: Number(next.inventory.stock),
@@ -127,7 +161,17 @@ export default function AdminProductCreatePage() {
 
       setPhase('creating')
       await createProductWithInventory(productData, inventoryData)
-      if (activeRef.current) navigate('/admin/stock', { replace: true })
+      if (!activeRef.current) return
+      if (addAnother) {
+        setValues({ ...initialValues, product: { ...initialValues.product, categoria: next.product.categoria } })
+        setErrors({})
+        setSubmitted(false)
+        currentCodeRef.current = ''
+        setFormVersion(version => version + 1)
+        setSuccess(`Se creó ${next.product.nombre} con su inventario inicial.`)
+      } else {
+        navigate('/admin/stock', { replace: true })
+      }
     } catch (error) {
       if (activeRef.current) {
         setSubmitError(error instanceof ProductInventoryCreationError
@@ -145,7 +189,7 @@ export default function AdminProductCreatePage() {
     const id = `new-product-${name}`
     const props = {
       id, name, required, maxLength,
-      value: values[group][name],
+      value: values[group][name] ?? '',
       onChange: event => changeValue(group, name, event.target.value),
       className: `${options ? 'form-select' : 'form-control'}${visibleErrors[name] ? ' is-invalid' : ''}`,
       'aria-invalid': visibleErrors[name] ? true : undefined,
@@ -191,6 +235,7 @@ export default function AdminProductCreatePage() {
           <div className="card-body p-3 p-md-4">
             <p className="text-muted">Completa los datos del producto y su inventario inicial.</p>
             <form onSubmit={handleSubmit} noValidate aria-busy={pending}>
+              {success && <p className="alert alert-success" role="status">{success}</p>}
               <div role="alert">
                 {Object.keys(visibleErrors).length > 0 && (
                   <p className="alert alert-danger">Revisa los campos indicados: {Object.keys(visibleErrors).length} con errores.</p>
@@ -199,7 +244,14 @@ export default function AdminProductCreatePage() {
               </div>
               <fieldset className="mb-4" disabled={pending}>
                 <legend className="fs-5 fw-semibold">Producto</legend>
-                <div className="row g-3">{productFields.map(field => renderField('product', field))}</div>
+                <div className="row g-3 mb-3">
+                  {renderField('product', { name: 'categoria', label: 'Categoría', required: true, options: CATALOG_CATEGORIES })}
+                </div>
+                {values.product.categoria === 'juego' && <RawgGameSearch key={formVersion} onSelect={importGame} />}
+                <div className="row g-3">
+                  {productFields.map(field => renderField('product', field))}
+                  {categoryFields.map(field => renderField('product', field))}
+                </div>
                 <div className="form-check mt-3">
                   <input
                     id="new-product-enOferta"
@@ -211,17 +263,43 @@ export default function AdminProductCreatePage() {
                   />
                   <label htmlFor="new-product-enOferta" className="form-check-label">Producto en oferta</label>
                 </div>
+                {values.product.enOferta && (
+                  <div className="mt-3">
+                    <div className="row g-3">
+                      {renderField('product', {
+                        name: 'porcentajeOferta',
+                        label: 'Descuento',
+                        required: true,
+                        options: OFFER_PERCENTAGES.map(percentage => ({ value: percentage, label: `${percentage}%` })),
+                      })}
+                    </div>
+                    <div aria-live="polite">
+                      {offerPrice > 0 && offerPrice < price && (
+                        <p className="alert alert-info mt-3 mb-0">
+                          <strong>Precio final {formatCLP(offerPrice)}</strong>
+                          <span className="ms-3">Ahorro {formatCLP(price - offerPrice)}</span>
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
               </fieldset>
+              <ProductImageFields key={formVersion} cover={values.product.imagen} gallery={values.product.imagenes}
+                disabled={pending} onChange={(name, value) => changeValue('product', name, value)}
+                onReadingChange={changeReadingImages} />
               <fieldset className="mb-4" disabled={pending}>
                 <legend className="fs-5 fw-semibold">Inventario</legend>
                 <div className="row g-3">{inventoryFields.map(field => renderField('inventory', field))}</div>
               </fieldset>
               <p className="text-muted" role="status">
-                {phase === 'checking' ? 'Comprobando código...' : phase === 'creating' ? 'Creando producto e inventario...' : ''}
+                {phase === 'checking' ? 'Comprobando código...' : phase === 'creating' ? 'Creando producto e inventario...' : readingImages ? 'Preparando im?genes...' : ''}
               </p>
-              <button type="submit" className="btn btn-dark w-100 py-2" disabled={pending}>
-                {phase === 'checking' ? 'Comprobando...' : phase === 'creating' ? 'Creando...' : 'Crear producto'}
-              </button>
+              <div className="d-grid d-sm-flex gap-2">
+                <button type="submit" className="btn btn-dark py-2" disabled={pending}>Crear producto</button>
+                <button type="submit" value="add-another" className="btn btn-outline-secondary py-2" disabled={pending}>
+                  Guardar y agregar otro
+                </button>
+              </div>
             </form>
           </div>
         </div>

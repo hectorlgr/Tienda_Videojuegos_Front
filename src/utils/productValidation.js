@@ -1,5 +1,5 @@
 import { CATALOG_CATEGORIES } from '../config/catalogCategories'
-import { STORE_ECOSYSTEMS } from '../config/storeEcosystems'
+import { calculateOfferPrice, getCategoryFields, OFFER_PERCENTAGES } from '../config/productForm'
 
 export function normalizeProductCode(code) {
   return code.trim().toUpperCase()
@@ -22,26 +22,30 @@ export function validateProductForm({ product, inventory }) {
   if (!CATALOG_CATEGORIES.some(category => category.value === product.categoria)) {
     errors.categoria = 'Selecciona una categoría válida.'
   }
-  if (!STORE_ECOSYSTEMS.some(ecosystem => ecosystem.value === product.ecosistema)) {
-    errors.ecosistema = 'Selecciona un ecosistema válido.'
+  for (const field of getCategoryFields(product.categoria)) {
+    const value = product[field.name]?.trim() ?? ''
+    if (!value && field.required) {
+      errors[field.name] = field.options ? 'Selecciona una opción.' : 'Completa este campo.'
+    } else if (value && field.options && !field.options.some(option => option.value === value)) {
+      errors[field.name] = 'Selecciona una opción válida.'
+    }
   }
   if (!validInteger(product.precio, 1)) {
     errors.precio = 'Ingresa un precio entero seguro mayor que 0.'
   }
-  // Con "Producto en oferta" marcado, el precio de oferta es obligatorio y menor al normal.
   if (product.enOferta) {
-    if (!validInteger(product.precioOferta, 1)) {
-      errors.precioOferta = 'Ingresa un precio de oferta entero mayor que 0.'
-    } else if (validInteger(product.precio, 1) && Number(product.precioOferta) >= Number(product.precio)) {
-      errors.precioOferta = 'El precio de oferta debe ser menor que el precio normal.'
+    const percentage = Number(product.porcentajeOferta)
+    const price = Number(product.precio)
+    const offerPrice = calculateOfferPrice(price, percentage)
+    if (!OFFER_PERCENTAGES.includes(percentage)) {
+      errors.porcentajeOferta = 'Selecciona un porcentaje de descuento.'
+    } else if (offerPrice !== null && (offerPrice <= 0 || offerPrice >= price)) {
+      errors.porcentajeOferta = 'El precio final redondeado debe ser mayor que $0 y menor que el precio normal.'
     }
   }
   // El formulario antiguo generaba la descripción corta con los primeros 120 caracteres.
   if (product.descripcionCorta.length > 120) errors.descripcionCorta = 'Máximo 120 caracteres.'
   if (product.descripcionLarga.length > 500) errors.descripcionLarga = 'Máximo 500 caracteres.'
-  if (product.formato !== '' && !['fisico', 'digital'].includes(product.formato)) {
-    errors.formato = 'Selecciona un formato válido o déjalo vacío.'
-  }
   if (!validInteger(inventory.stock, 0)) {
     errors.stock = 'Ingresa un stock entero seguro mayor o igual a 0.'
   }
