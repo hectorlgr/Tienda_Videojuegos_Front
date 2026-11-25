@@ -5,7 +5,7 @@ import { getOrders } from '../services/orderService'
 import { getUsers } from '../services/userService'
 import { countSoldOutProducts } from '../utils/adminMetrics'
 
-// Calcula las estadísticas de Reportes a partir de los datos de JSON Server.
+// Calcula las estadísticas del reporte con los productos, el inventario, los pedidos y los usuarios.
 function calculateReport(products, inventory, orders, users) {
   // Suma el stock de todos los registros de inventario.
   const stockTotal = inventory.reduce((total, record) => total + record.stock, 0)

@@ -1,104 +1,85 @@
 # CheckPoint Store
 
-Migración de una tienda de videojuegos a **React + Vite + JavaScript**, con React Router y Bootstrap. Utiliza **JSON Server 0.17.4** como backend temporal para fines académicos; posteriormente será sustituido por un backend real.
+CheckPoint Store es una tienda académica de videojuegos y productos relacionados. Desde el navegador se puede explorar el catálogo, preparar un carrito y registrar pedidos. El personal de la tienda dispone de un panel con funciones según su rol.
 
-## Requisitos e instalación
+## Instalación y primer arranque
 
-Necesitas **Node.js y npm**. Después de clonar el repositorio, abre una terminal en la carpeta `tienda-react` (la que contiene `package.json`):
+1. Instala Node.js con npm. Una versión compatible con las herramientas de desarrollo y pruebas es **Node.js 24.15.0 o posterior de la serie 24**.
+2. Para usar el catálogo, la autenticación y los pedidos, inicia el entorno descrito en el [repositorio del backend](https://github.com/hectorlgr/Tienda_Videojuegos_Back#readme). Espera a que el Gateway esté disponible en `http://localhost:9090`.
+3. Abre PowerShell en la raíz del clon del frontend, donde se encuentran `package.json` y `package-lock.json`. Instala las versiones fijadas y crea la configuración local.
 
-```powershell
-npm install
-Copy-Item .env.example .env
-```
+   ```powershell
+   npm ci
+   Copy-Item .env.example .env
+   ```
 
-La copia de `.env.example` solo es necesaria la primera vez, si aún no existe `.env`.
+   En Linux o macOS, usa `cp .env.example .env` para la copia. El archivo de ejemplo ya apunta al Gateway local.
 
-### Configuración
+   ```dotenv
+   VITE_API_BASE_URL=http://localhost:9090
+   ```
 
-`VITE_API_URL` indica la dirección de la API temporal. `.env.example` contiene la configuración de referencia:
+   Si el Gateway se ejecuta en otra dirección, cambia el valor en `.env` y reinicia Vite. Esta variable es pública y solo debe contener el origen del Gateway.
 
-```env
-VITE_API_URL=http://127.0.0.1:3001
-```
+4. Inicia el servidor de desarrollo.
 
-Esta variable es pública y no contiene secretos. Reinicia Vite si cambias `.env`.
+   ```sh
+   npm run dev
+   ```
 
-## Ejecutar en desarrollo
+   Abre [la tienda local](http://localhost:5173) y entra en **Productos** para consultar el catálogo. Si Vite anuncia otro puerto, libera el 5173 y vuelve a ejecutar el comando. El Gateway permite el origen local de desarrollo en ese puerto.
 
-Utiliza **dos terminales**, ambas en `tienda-react`:
+## Integración con el backend
 
-**Terminal 1 — datos temporales con JSON Server:**
+El navegador envía las solicitudes HTTP al Gateway mediante los módulos de `src/services/` y el cliente común `src/services/httpClient.js`, basado en `fetch`. El Gateway aplica las reglas de acceso y dirige cada solicitud al servicio correspondiente.
 
-```powershell
-npm run server
-```
-
-Expone `db.json` en `http://127.0.0.1:3001`.
-
-**Terminal 2 — frontend con Vite:**
-
-```powershell
-npm run dev
-```
-
-Abre la URL que indique Vite en la terminal, normalmente `http://localhost:5173`.
-
-## Funcionalidades actuales
-
-- **Home (`/`):** categorías, destacados con datos reales, banners y contenido informativo.
-- **Catálogo (`/productos`):** búsqueda global, filtros por categoría y navegación al detalle (`/productos/:id`).
-- **Carrito (`/carrito`):** añadir productos, modificar cantidades, eliminar y vaciar; consulta disponibilidad de inventario y mantiene el contador compartido.
-- **Login y Registro (`/login`, `/registro`):** validaciones, creación de cuentas de cliente, sesión, logout público/administrativo, roles y rutas protegidas mediante guards.
-- **Contacto (`/contacto`):** formulario con validaciones locales.
-- **Críticas (`/criticas`):** contenido editorial estático migrado del proyecto original.
-- **Órdenes (`/admin/ordenes`):** listado administrativo de solo lectura.
-- **Stock (`/admin/stock`):** consulta de productos e inventario y edición del stock actual por fila.
-- **Nuevo producto (`/admin/productos/nuevo`):** validación local, comprobación de código comercial y creación secuencial de Producto + Inventario.
-
-La navegación utiliza React Router y layouts compartidos. Las peticiones se centralizan en servicios sobre `httpClient` (GET, POST y PATCH).
-
-## Persistencia
-
-| Ubicación | Datos |
+| Servicio | Operaciones del frontend |
 | --- | --- |
-| JSON Server (`db.json`) | `productos`, `inventario`, `usuarios`, `ordenes` |
-| LocalStorage | `carritoTiendaJuegos`: únicamente `{ productoId, cantidad }` por línea |
-| SessionStorage | `usuarioActivo`: sesión del usuario, sin contraseña |
+| Identidad | Registro de clientes, inicio de sesión, perfil y consulta administrativa de usuarios. |
+| Catálogo | Consulta de productos y existencias, alta de productos y movimientos de stock. |
+| Ventas | Registro del pedido, historial del comprador y consulta de órdenes del personal. |
 
-Los datos comerciales pertenecen a `productos`; `stock` y `stockCritico` pertenecen a `inventario`, relacionado mediante `productoId`. Las altas de usuarios/productos/inventario y los cambios de stock se guardan en `db.json` al usar JSON Server.
+Las operaciones protegidas utilizan la sesión emitida por el backend. El navegador conserva la sesión en `sessionStorage`. El acceso a MySQL corresponde a los servicios del backend.
 
-## Cuentas demostrativas
+## Funcionalidades y roles
 
-Credenciales incluidas en `db.json`, exclusivamente para probar este proyecto académico:
-
-| Rol | Correo | Contraseña |
-| --- | --- | --- |
-| administrador | admin@checkpointstore.cl | `Admin123!` |
-| vendedor | vendedor@checkpointstore.cl | `Vendedor123!` |
-| cliente | cliente@checkpointstore.cl | `Cliente123!` |
-
-- **Administrador:** Órdenes, Stock y Nuevo producto.
-- **Vendedor:** Órdenes.
-- **Cliente:** área pública.
-
-La autenticación es simulada; las contraseñas de demostración están en texto plano en JSON Server.
-
-## Alcance académico deliberado
-
-- **PAY** no ejecuta una compra y el carrito no genera órdenes.
-- Las órdenes son demostrativas y de **solo lectura**; **Ver detalle** no tiene acción.
-- Contacto valida los datos, pero no envía mensajes ni los guarda.
-- Newsletter y referencias de redes sociales son visuales, sin suscripción ni integración externa.
-- Stock permite editar la cantidad actual, no el stock crítico ni crear registros faltantes desde esa vista.
-- Si se crea un producto pero falla su inventario, se informa la creación parcial; no hay rollback automático.
-- JSON Server es temporal y será reemplazado por un backend real.
-
-## Scripts disponibles
-
-| Comando | Uso |
+| Acceso | Funciones |
 | --- | --- |
-| `npm run dev` | Iniciar el frontend con Vite |
-| `npm run server` | Iniciar JSON Server observando `db.json` |
-| `npm run build` | Generar el frontend de producción en `dist` |
-| `npm run lint` | Revisar el código con ESLint |
-| `npm run preview` | Servir localmente el build generado; no inicia la API |
+| Visitante | Explorar productos, categorías y ofertas, consultar fichas, preparar un carrito y registrarse como cliente. |
+| Cliente | Ajustar el carrito, confirmar un pedido en `/checkout`, editar su perfil y consultar sus pedidos en `/perfil`. |
+| Vendedor | Consultar las órdenes de la tienda en `/admin/ordenes`. |
+| Administrador | Consultar órdenes, indicadores, reportes y usuarios, listar y crear productos y ajustar existencias desde `/admin`. |
+
+### Persistencia del carrito
+
+El frontend guarda las líneas del carrito (identificador del producto y cantidad) en `localStorage`, bajo la clave `checkpoint.carritos.v2`. Mantiene un carrito de invitado y uno por cada cuenta de cliente. Al iniciar sesión como cliente, combina el carrito de invitado con el de esa cuenta y comprueba las cantidades contra el inventario disponible. Al cerrar sesión, el carrito personal queda guardado para la próxima visita con esa cuenta.
+
+La persistencia se limita al mismo navegador, perfil y origen de la tienda. Otro dispositivo tiene su propio carrito. Borrar los datos del sitio elimina los carritos almacenados allí.
+
+## Limitaciones del MVP
+
+- Confirmar la compra registra un pedido. El cobro y el despacho efectivo quedan fuera del flujo.
+- El formulario de contacto solo valida los campos en el navegador. El envío y almacenamiento de mensajes quedan pendientes.
+- La sección de críticas presenta contenido editorial estático.
+
+## Tecnologías y verificación
+
+El frontend está escrito en JavaScript y JSX. Las versiones indicadas son las resueltas en `package-lock.json`, que reproduce `npm ci`.
+
+| Área | Tecnologías |
+| --- | --- |
+| Interfaz y navegación | React y React DOM 19.3.0, React Router DOM 7.18.4 |
+| Estilos y animaciones | Bootstrap 5.3.8, GSAP 3.15.1 |
+| Edición y saneamiento de contenido | Tiptap 3.35.0, DOMPurify 3.5.0 |
+| Desarrollo y compilación | Vite 8.3.3, complemento React para Vite 6.1.2 |
+| Pruebas y análisis | Vitest 5.0.5, Testing Library para React 16.3.3, jsdom 30.1.3, ESLint 10.15.0 |
+
+Ejecuta estos comandos desde la raíz del frontend.
+
+| Comando | Resultado |
+| --- | --- |
+| `npm test` | Ejecuta las pruebas una vez. |
+| `npm run test:watch` | Repite las pruebas al detectar cambios. |
+| `npm run lint` | Analiza el código con ESLint. |
+| `npm run build` | Genera la compilación de producción en `dist/`. |
+| `npm run preview` | Sirve localmente la compilación existente para inspeccionarla. Requiere ejecutar antes `npm run build`. |
