@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { getProducts } from '../services/productService'
 import { getInventory } from '../services/inventoryService'
 import { getOrders } from '../services/orderService'
+import { getUsers } from '../services/userService'
 import { countSoldOutProducts, isRecordCollection } from '../utils/adminMetrics'
 
 async function loadCollection(request) {
@@ -18,23 +19,24 @@ export function useAdminDashboard() {
     let active = true
 
     async function loadMetrics() {
-      const [products, inventory, orders] = (await Promise.allSettled([
+      const [products, inventory, orders, users] = (await Promise.allSettled([
         loadCollection(getProducts),
         loadCollection(getInventory),
         loadCollection(getOrders),
+        loadCollection(getUsers),
       ])).map(outcome => outcome.status === 'fulfilled' ? outcome.value : null)
       if (!active) return
 
       const metrics = {
         products: products?.length ?? null,
-        users: null,
+        users: users?.length ?? null,
         orders: orders?.length ?? null,
         soldOut: products && inventory ? countSoldOutProducts(products, inventory) : null,
       }
       setResult({
         metrics,
         loading: false,
-        partialError: [products, inventory, orders].includes(null),
+        partialError: [products, inventory, orders, users].includes(null),
       })
     }
 

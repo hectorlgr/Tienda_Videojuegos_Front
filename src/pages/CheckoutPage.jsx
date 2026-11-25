@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import ShippingDestination from '../components/store/ShippingDestination'
 import { SHIPPING_REGIONS } from '../config/shippingRegions'
@@ -6,10 +6,12 @@ import { useCartDetails } from '../hooks/useCartDetails'
 import { useAuth } from '../hooks/useAuth'
 import { useCart } from '../hooks/useCart'
 import { createOrder } from '../services/orderService'
+import { getProfile } from '../services/profileService'
 import { initialCheckoutDelivery, normalizeCheckoutDelivery, validateCheckout } from '../utils/checkoutValidation'
 import { calculateCartTotal, calculateLineSubtotal, calculateProductsSubtotal, isValidPrice } from '../utils/cartCalculations'
 import { formatCLP } from '../utils/currency'
 import { getEffectivePrice } from '../utils/pricing'
+import { readAccessToken, userFromToken } from '../utils/authSession'
 
 const deliveryFields = [
   { name: 'destinatario', label: 'Destinatario', maxLength: 255 },
@@ -30,26 +32,36 @@ function readAttempt(key) {
 
 function saveAttempt(key, attempt) {
   try {
-    if (attempt) sessionStorage.setItem(key, JSON.stringify(attempt))
-    else sessionStorage.removeItem(key)
+    sessionStorage.setItem(key, JSON.stringify(attempt))
+    return true
   } catch {
-    // El intento sigue disponible en memoria durante esta visita.
+    return false
   }
 }
 
 export default function CheckoutPage() {
+  const { user } = useAuth()
+  return user?.rol === 'cliente' ? <BuyerCheckout key={user.id} user={user} /> : null
+}
+
+function BuyerCheckout({ user }) {
   const navigate = useNavigate()
   const { lines, loading, error } = useCartDetails()
-  const { user } = useAuth()
-  const { items, clearCart } = useCart()
+  const { clearPurchasedCart } = useCart()
   const [delivery, setDelivery] = useState(() => initialCheckoutDelivery(user))
-  const [errors, setErrors] = useState({})
+  const editedFields = useRef(new Set())
   const [submitted, setSubmitted] = useState(false)
   const [accepted, setAccepted] = useState(false)
   const [sending, setSending] = useState(false)
   const [paymentError, setPaymentError] = useState('')
   const attemptKey = `checkout-attempt-${user.id}`
   const [attempt, setAttempt] = useState(() => readAttempt(attemptKey))
+  const persisted = useRef(Boolean(attempt))
+  const mounted = useRef(false)
+  useLayoutEffect(() => {
+    mounted.current = true
+    return () => { mounted.current = false }
+  }, [])
   const submitting = useRef(false)
   const needsDelivery = lines.some(({ product }) => product?.categoria !== 'juego' || product?.formato !== 'digital')
   const shippingCost = needsDelivery ? 3990 : 0
@@ -58,14 +70,37 @@ export default function CheckoutPage() {
   const validCart = lines.length > 0 && lines.length <= 100 &&
     lines.every(line => calculateLineSubtotal(line) !== null && line.cantidad <= line.stock)
   const canConfirm = validCart && Number.isSafeInteger(total) && total > 0
+  const errors = submitted ? validateCheckout(delivery) : {}
 
-  function changeDelivery(next) {
-    setDelivery(next)
-    if (submitted) setErrors(validateCheckout(next))
+  useEffect(() => {
+    if (!needsDelivery) return
+    let active = true
+    getProfile().then(profile => {
+      if (!active) return
+      const defaults = initialCheckoutDelivery(profile)
+      const updates = Object.entries(defaults).filter(([field, value]) => value && !editedFields.current.has(field))
+      setDelivery(current => ({ ...current, ...Object.fromEntries(updates) }))
+    }).catch(() => {
+      // El formulario sigue disponible para completar los datos manualmente.
+    })
+    return () => { active = false }
+  }, [needsDelivery, user.id])
+
+  function changeDelivery(changes) {
+    for (const field of Object.keys(changes)) editedFields.current.add(field)
+    setDelivery(current => ({ ...current, ...changes }))
   }
 
   async function confirmOrder() {
     if (submitting.current) return
+    const buyerId = user.id
+    const token = readAccessToken()
+    const session = userFromToken(token)
+    if (session?.id !== buyerId || session.rol !== 'cliente') {
+      setPaymentError('Verifica tu sesión antes de confirmar la compra.')
+      return
+    }
+    const sameSession = () => mounted.current && readAccessToken() === token
     setPaymentError('')
     let purchase = attempt
     if (!purchase) {
@@ -74,7 +109,6 @@ export default function CheckoutPage() {
       const nextErrors = needsDelivery ? validateCheckout(normalized) : {}
       setDelivery(normalized)
       setSubmitted(true)
-      setErrors(nextErrors)
       if (Object.keys(nextErrors).length > 0) return
 
       const { regionId, ...contact } = normalized
@@ -88,7 +122,14 @@ export default function CheckoutPage() {
         },
       }
       setAttempt(purchase)
-      saveAttempt(attemptKey, purchase)
+      persisted.current = saveAttempt(attemptKey, purchase)
+    }
+
+    function retireAttempt() {
+      if (!persisted.current) return true
+      if (readAttempt(attemptKey)?.id !== purchase.id) return false
+      sessionStorage.removeItem(attemptKey)
+      return true
     }
 
     submitting.current = true
@@ -97,19 +138,18 @@ export default function CheckoutPage() {
       const { status, data } = await createOrder(purchase.body, purchase.id)
       if (![200, 201].includes(status) || data?.resultado !== 'PEDIDO_CREADO' ||
           !Number.isSafeInteger(data.pedidoId) || data.pedidoId <= 0) {
-        setPaymentError('Tu pedido aún no está confirmado. Reintenta en unos segundos para consultar el mismo intento.')
+        if (sameSession()) setPaymentError('Tu pedido aún no está confirmado. Reintenta en unos segundos para consultar el mismo intento.')
         return
       }
+      if (retireAttempt()) clearPurchasedCart(buyerId, purchase.body.items)
+      if (!sameSession()) return
       setAttempt(null)
-      saveAttempt(attemptKey, null)
-      const purchased = purchase.body.items
-      if (items.length === purchased.length && items.every(item =>
-        purchased.some(line => line.productoId === item.productoId && line.cantidad === item.cantidad))) clearCart()
       navigate('/compra-exitosa', { replace: true, state: { pedidoId: data.pedidoId, estadoPedido: data.estadoPedido } })
     } catch (failure) {
+      if (!sameSession()) return
       if ([400, 413, 415, 422].includes(failure.status)) {
         setAttempt(null)
-        saveAttempt(attemptKey, null)
+        retireAttempt()
         setAccepted(false)
         setPaymentError('No pudimos completar el pedido. Revisa el stock, los precios y los datos de entrega antes de volver a intentar.')
       } else {
@@ -119,14 +159,13 @@ export default function CheckoutPage() {
       }
     } finally {
       submitting.current = false
-      setSending(false)
+      if (mounted.current) setSending(false)
     }
   }
 
   function changeRegion(regionId) {
     const nextRegion = SHIPPING_REGIONS.find(option => option.id === regionId)
     changeDelivery({
-      ...delivery,
       regionId,
       comuna: nextRegion?.comunas.includes(delivery.comuna) ? delivery.comuna : '',
     })
@@ -178,7 +217,7 @@ export default function CheckoutPage() {
                           aria-invalid={errors[name] ? true : undefined}
                           aria-describedby={errors[name] ? `checkout-${name}-error` : undefined}
                           value={delivery[name]}
-                          onChange={event => changeDelivery({ ...delivery, [name]: event.target.value })}
+                          onChange={event => changeDelivery({ [name]: event.target.value })}
                         />
                         {errors[name] && <div id={`checkout-${name}-error`} className="invalid-feedback">{errors[name]}</div>}
                       </div>
@@ -188,7 +227,7 @@ export default function CheckoutPage() {
                     regionId={delivery.regionId}
                     comuna={delivery.comuna}
                     onRegionChange={changeRegion}
-                    onComunaChange={comuna => changeDelivery({ ...delivery, comuna })}
+                    onComunaChange={comuna => changeDelivery({ comuna })}
                     errors={errors}
                   />
                 </section>

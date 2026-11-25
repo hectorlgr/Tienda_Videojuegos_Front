@@ -10,15 +10,8 @@ const ROLE_BADGES = {
   administrador: 'text-bg-dark',
 }
 
-const PUBLIC_FIELDS = ['id', 'run', 'nombre', 'apellidos', 'correo', 'direccion', 'region', 'comuna', 'rol']
-
-// /usuarios incluye password: se copia solo lo que el panel puede mostrar.
-export function toPublicUser(user) {
-  return Object.fromEntries(PUBLIC_FIELDS.map(field => [field, user[field] ?? null]))
-}
-
-export function fullName(user) {
-  return [user.nombre, user.apellidos].filter(value => typeof value === 'string' && value.trim() !== '').join(' ')
+export function toPublicUser({ id, nombre, email, role }) {
+  return { id, nombre, correo: email, rol: normalizedText(role, true) }
 }
 
 export function roleLabel(rol) {
@@ -34,14 +27,21 @@ function normalizedText(value, lowercase = false) {
   return lowercase ? value.trim().toLowerCase() : value.trim()
 }
 
-// Las órdenes no tienen usuarioId: solo se asocian si coincide el correo o el RUN.
-export function findUserOrders(user, orders) {
-  const email = normalizedText(user.correo, true)
-  const run = normalizedText(user.run)
-  if (email === null && run === null) return []
+export function normalizeId(value) {
+  const id = typeof value === 'string' && /^\d+$/.test(value.trim()) ? Number(value) : value
+  return Number.isSafeInteger(id) && id > 0 ? id : null
+}
 
-  return orders.filter(order => (
-    (email !== null && normalizedText(order.correo, true) === email) ||
-    (run !== null && normalizedText(order.run) === run)
-  ))
+export function findUserOrders(user, orders) {
+  const userId = normalizeId(user.id)
+  if (userId === null) return { matches: [], incomplete: true }
+
+  const matches = []
+  let incomplete = false
+  for (const order of orders) {
+    const buyerId = normalizeId(order.usuarioId)
+    if (buyerId === null) incomplete = true
+    else if (buyerId === userId) matches.push(order)
+  }
+  return { matches, incomplete }
 }
