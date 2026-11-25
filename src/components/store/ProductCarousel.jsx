@@ -5,6 +5,7 @@ import { publicAsset } from '../../utils/assets'
 import { getDiscountPercent, hasValidOffer } from '../../utils/pricing'
 import { gsap, motionAllowed, useGSAP } from '../../utils/storeAnimations'
 import ProductPrice from './ProductPrice'
+import ProductDescription from '../common/ProductDescription'
 
 const AUTOPLAY_DELAY = 5000
 
@@ -81,7 +82,7 @@ export default function ProductCarousel({ products }) {
               </div>
               <div className="product-carousel-content">
                 <h3>{product.nombre}</h3>
-                {product.descripcionCorta && <p>{product.descripcionCorta}</p>}
+                <ProductDescription value={product.descripcionCorta} fromRawg={product.rawgId != null} />
                 <ProductPrice product={product} />
                 <Link className="primary-btn" to={productUrl}>Ver producto</Link>
               </div>

@@ -6,7 +6,9 @@ import { formatCLP } from '../../utils/currency'
 import { getRawgGame, importRawgGame } from '../../services/rawgService'
 import RawgGameSearch from '../../components/admin/RawgGameSearch'
 import ProductImageFields from '../../components/admin/ProductImageFields'
+import RichTextEditor from '../../components/common/RichTextEditor'
 import { normalizeProductCode, validateProductForm } from '../../utils/productValidation'
+import { LONG_DESCRIPTION_LIMIT, SHORT_DESCRIPTION_LIMIT } from '../../utils/productDescription'
 import { createProduct } from '../../services/productService'
 
 const initialValues = {
@@ -21,8 +23,8 @@ const productFields = [
   { name: 'codigo', label: 'Código comercial', required: true, help: 'Mínimo 3 caracteres. Se normaliza a mayúsculas al salir del campo o validar.' },
   { name: 'nombre', label: 'Nombre', required: true, maxLength: 100 },
   { name: 'precio', label: 'Precio (CLP)', type: 'number', min: 1, required: true },
-  { name: 'descripcionCorta', label: 'Descripción corta', multiline: true, maxLength: 120 },
-  { name: 'descripcionLarga', label: 'Descripción larga', multiline: true, maxLength: 500 },
+  { name: 'descripcionCorta', label: 'Descripción corta', richText: true, maxLength: SHORT_DESCRIPTION_LIMIT },
+  { name: 'descripcionLarga', label: 'Descripción larga', richText: true, maxLength: LONG_DESCRIPTION_LIMIT },
 ]
 
 const inventoryFields = [
@@ -160,7 +162,7 @@ export default function AdminProductCreatePage() {
   }
 
   function renderField(group, field) {
-    const { name, label, required, maxLength, multiline, options, help, type = 'text', min, inputMode } = field
+    const { name, label, required, maxLength, richText, options, help, type = 'text', min, inputMode } = field
     const id = `new-product-${name}`
     const props = {
       id, name, required, maxLength,
@@ -172,7 +174,7 @@ export default function AdminProductCreatePage() {
     }
     return (
       <div className="col-12 col-md-6" key={name}>
-        <label htmlFor={id} className="form-label fw-semibold">
+        <label id={`${id}-label`} htmlFor={richText ? undefined : id} className="form-label fw-semibold">
           {label}{!required && <span className="text-muted fw-normal"> (opcional)</span>}
         </label>
         {options ? (
@@ -180,8 +182,18 @@ export default function AdminProductCreatePage() {
             <option value="">Selecciona una opción</option>
             {options.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
           </select>
-        ) : multiline ? (
-          <textarea {...props} rows={3} />
+        ) : richText ? (
+          <RichTextEditor
+            key={formVersion}
+            id={id}
+            value={props.value}
+            onChange={value => changeValue(group, name, value)}
+            maxLength={maxLength}
+            long={name === 'descripcionLarga'}
+            disabled={pending}
+            invalid={props['aria-invalid']}
+            describedBy={props['aria-describedby']}
+          />
         ) : (
           <input
             {...props}
@@ -194,7 +206,7 @@ export default function AdminProductCreatePage() {
           />
         )}
         {help && <p id={`${id}-help`} className="form-text mb-0">{help}</p>}
-        {visibleErrors[name] && <div id={`${id}-error`} className="invalid-feedback">{visibleErrors[name]}</div>}
+        {visibleErrors[name] && <div id={`${id}-error`} className={`invalid-feedback${richText ? ' d-block' : ''}`}>{visibleErrors[name]}</div>}
       </div>
     )
   }
