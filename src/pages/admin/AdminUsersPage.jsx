@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useAdminUsers } from '../../hooks/useAdminUsers'
-import { fullName, roleBadgeClass, roleLabel } from '../../utils/adminUsers'
+import { roleBadgeClass, roleLabel } from '../../utils/adminUsers'
 
 function displayValue(value) {
   return value == null || value === '' ? '—' : value
@@ -42,9 +42,7 @@ export default function AdminUsersPage() {
                   <tr>
                     <th scope="col">ID</th>
                     <th scope="col">Nombre</th>
-                    <th scope="col">RUN</th>
                     <th scope="col">Correo</th>
-                    <th scope="col">Comuna</th>
                     <th scope="col">Rol</th>
                     <th scope="col">Acciones</th>
                   </tr>
@@ -53,16 +51,14 @@ export default function AdminUsersPage() {
                   {users.map(user => (
                     <tr key={user.id}>
                       <td>{displayValue(user.id)}</td>
-                      <th scope="row">{displayValue(fullName(user))}</th>
-                      <td className="text-nowrap">{displayValue(user.run)}</td>
+                      <th scope="row">{displayValue(user.nombre)}</th>
                       <td>{displayValue(user.correo)}</td>
-                      <td>{displayValue(user.comuna)}</td>
                       <td><span className={`badge ${roleBadgeClass(user.rol)}`}>{roleLabel(user.rol)}</span></td>
                       <td>
                         <Link
                           className="btn btn-sm btn-primary text-nowrap"
                           to={`/admin/usuarios/${user.id}`}
-                          aria-label={`Ver detalle de ${displayValue(fullName(user) || user.correo)}`}
+                          aria-label={`Ver detalle de ${displayValue(user.nombre || user.correo)}`}
                         >
                           Ver detalle
                         </Link>

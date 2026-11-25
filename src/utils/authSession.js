@@ -2,7 +2,7 @@ const SESSION_STORAGE_KEY = 'checkpoint.jwt'
 let accessToken = null
 const VALID_ROLES = ['cliente', 'vendedor', 'administrador']
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
-const OPTIONAL_FIELDS = ['run', 'nombre', 'apellidos', 'direccion', 'region', 'comuna']
+const OPTIONAL_FIELDS = ['nombre', 'apellidos', 'direccion', 'region', 'comuna']
 
 // Copia solo los campos permitidos; password (y cualquier otro campo) queda fuera.
 export function sanitizeSessionUser(user) {

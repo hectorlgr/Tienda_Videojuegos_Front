@@ -1,13 +1,19 @@
 import { SHIPPING_REGIONS } from '../config/shippingRegions.js'
 
+function locationKey(value) {
+  return typeof value === 'string' ? value.trim().normalize('NFD').replace(/\p{M}/gu, '').toLowerCase() : ''
+}
+
 export function initialCheckoutDelivery(user) {
-  const region = SHIPPING_REGIONS.find(option => option.id === user?.region || option.nombre === user?.region)
+  const regionKey = locationKey(user?.region)
+  const region = SHIPPING_REGIONS.find(option => option.id === regionKey || locationKey(option.nombre) === regionKey)
+  const communeKey = locationKey(user?.comuna)
   return {
     destinatario: [user?.nombre, user?.apellidos].filter(Boolean).join(' '),
     telefono: user?.telefono ?? '',
     direccion: user?.direccion ?? '',
     regionId: region?.id ?? '',
-    comuna: region?.comunas.includes(user?.comuna) ? user.comuna : '',
+    comuna: region?.comunas.find(name => locationKey(name) === communeKey) ?? '',
   }
 }
 

@@ -37,6 +37,7 @@ function sendJson(resource, method, data, options) {
 
 function isProtected(path, method) {
   return /^\/api\/admin(?:\/|$)/.test(path)
+    || (method === 'GET' && /^\/api\/v1\/admin\/usuarios(?:\/\d+)?$/.test(path))
     || (path === '/api/v1/usuarios/me' && ['GET', 'PATCH'].includes(method))
     || (method === 'GET' && /^\/api\/pedidos\/(?:mis-pedidos|\d+)$/.test(path))
     || (method === 'POST' && path === '/api/pedidos')

@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import ShippingDestination from '../components/store/ShippingDestination'
 import { SHIPPING_REGIONS } from '../config/shippingRegions'
@@ -6,6 +6,7 @@ import { useCartDetails } from '../hooks/useCartDetails'
 import { useAuth } from '../hooks/useAuth'
 import { useCart } from '../hooks/useCart'
 import { createOrder } from '../services/orderService'
+import { getProfile } from '../services/profileService'
 import { initialCheckoutDelivery, normalizeCheckoutDelivery, validateCheckout } from '../utils/checkoutValidation'
 import { calculateCartTotal, calculateLineSubtotal, calculateProductsSubtotal, isValidPrice } from '../utils/cartCalculations'
 import { formatCLP } from '../utils/currency'
@@ -43,7 +44,7 @@ export default function CheckoutPage() {
   const { user } = useAuth()
   const { items, clearCart } = useCart()
   const [delivery, setDelivery] = useState(() => initialCheckoutDelivery(user))
-  const [errors, setErrors] = useState({})
+  const editedFields = useRef(new Set())
   const [submitted, setSubmitted] = useState(false)
   const [accepted, setAccepted] = useState(false)
   const [sending, setSending] = useState(false)
@@ -58,10 +59,25 @@ export default function CheckoutPage() {
   const validCart = lines.length > 0 && lines.length <= 100 &&
     lines.every(line => calculateLineSubtotal(line) !== null && line.cantidad <= line.stock)
   const canConfirm = validCart && Number.isSafeInteger(total) && total > 0
+  const errors = submitted ? validateCheckout(delivery) : {}
 
-  function changeDelivery(next) {
-    setDelivery(next)
-    if (submitted) setErrors(validateCheckout(next))
+  useEffect(() => {
+    if (!needsDelivery) return
+    let active = true
+    getProfile().then(profile => {
+      if (!active) return
+      const defaults = initialCheckoutDelivery(profile)
+      const updates = Object.entries(defaults).filter(([field, value]) => value && !editedFields.current.has(field))
+      setDelivery(current => ({ ...current, ...Object.fromEntries(updates) }))
+    }).catch(() => {
+      // El formulario sigue disponible para completar los datos manualmente.
+    })
+    return () => { active = false }
+  }, [needsDelivery, user.id])
+
+  function changeDelivery(changes) {
+    for (const field of Object.keys(changes)) editedFields.current.add(field)
+    setDelivery(current => ({ ...current, ...changes }))
   }
 
   async function confirmOrder() {
@@ -74,7 +90,6 @@ export default function CheckoutPage() {
       const nextErrors = needsDelivery ? validateCheckout(normalized) : {}
       setDelivery(normalized)
       setSubmitted(true)
-      setErrors(nextErrors)
       if (Object.keys(nextErrors).length > 0) return
 
       const { regionId, ...contact } = normalized
@@ -126,7 +141,6 @@ export default function CheckoutPage() {
   function changeRegion(regionId) {
     const nextRegion = SHIPPING_REGIONS.find(option => option.id === regionId)
     changeDelivery({
-      ...delivery,
       regionId,
       comuna: nextRegion?.comunas.includes(delivery.comuna) ? delivery.comuna : '',
     })
@@ -178,7 +192,7 @@ export default function CheckoutPage() {
                           aria-invalid={errors[name] ? true : undefined}
                           aria-describedby={errors[name] ? `checkout-${name}-error` : undefined}
                           value={delivery[name]}
-                          onChange={event => changeDelivery({ ...delivery, [name]: event.target.value })}
+                          onChange={event => changeDelivery({ [name]: event.target.value })}
                         />
                         {errors[name] && <div id={`checkout-${name}-error`} className="invalid-feedback">{errors[name]}</div>}
                       </div>
@@ -188,7 +202,7 @@ export default function CheckoutPage() {
                     regionId={delivery.regionId}
                     comuna={delivery.comuna}
                     onRegionChange={changeRegion}
-                    onComunaChange={comuna => changeDelivery({ ...delivery, comuna })}
+                    onComunaChange={comuna => changeDelivery({ comuna })}
                     errors={errors}
                   />
                 </section>

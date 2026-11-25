@@ -1,13 +1,13 @@
-import { postJson, HttpError } from './httpClient.js'
+import { getJson, postJson } from './httpClient.js'
 
-const unavailable = 'Identidad no ofrece una consulta administrativa de usuarios.'
+const adminUsersPath = '/api/v1/admin/usuarios'
 
-export async function getUsers() {
-  throw new HttpError(unavailable, 501)
+export function getUsers() {
+  return getJson(adminUsersPath)
 }
 
-export async function getUserById() {
-  throw new HttpError(unavailable, 501)
+export function getUserById(id) {
+  return getJson(`${adminUsersPath}/${id}`)
 }
 
 export function registerCustomer({ nombre, email, password }) {

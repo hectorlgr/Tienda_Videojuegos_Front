@@ -1,15 +1,12 @@
 import { Link, useParams } from 'react-router-dom'
 import { useAdminUserDetail } from '../../hooks/useAdminUserDetail'
-import { fullName, roleBadgeClass, roleLabel } from '../../utils/adminUsers'
+import { roleBadgeClass, roleLabel } from '../../utils/adminUsers'
 import { formatCLP } from '../../utils/currency'
 import { orderStatusClass } from '../../utils/orderStatus'
 
 const profileFields = [
-  ['run', 'RUN'],
+  ['id', 'ID'],
   ['correo', 'Correo'],
-  ['direccion', 'Dirección'],
-  ['comuna', 'Comuna'],
-  ['region', 'Región'],
 ]
 
 function displayValue(value) {
@@ -41,18 +38,21 @@ function DetailStatus({ title, description, loading = false }) {
   )
 }
 
-function UserOrders({ orders, ordersError }) {
+function UserOrders({ orders, ordersError, incomplete }) {
   if (ordersError) {
     return <p className="alert alert-warning mb-0" role="alert">No fue posible cargar las compras de este usuario.</p>
   }
   if (orders.length === 0) {
-    return <p className="text-muted mb-0">Sin compras asociadas.</p>
+    return <p className="text-muted mb-0">{incomplete
+      ? 'Faltan identificadores válidos para determinar si este usuario tiene compras.'
+      : 'Este usuario no tiene compras asociadas.'}</p>
   }
 
   return (
     <div className="table-responsive admin-user-orders-table" role="region" aria-label="Compras asociadas" tabIndex={0}>
+      {incomplete && <p>Algunos pedidos carecen de un ID de comprador válido. La lista puede estar incompleta.</p>}
       <table className="table table-striped align-middle mb-0">
-        <caption className="visually-hidden">Órdenes asociadas por correo o RUN</caption>
+        <caption className="visually-hidden">Pedidos asociados por ID de comprador</caption>
         <thead className="table-dark">
           <tr>
             <th scope="col">Orden</th>
@@ -81,7 +81,7 @@ function UserOrders({ orders, ordersError }) {
 export default function AdminUserDetailPage() {
   const { id } = useParams()
   const userId = Number(id)
-  const { user, orders, loading, error, ordersError } = useAdminUserDetail(userId)
+  const { user, orders, loading, error, ordersError, incomplete } = useAdminUserDetail(userId)
 
   if (!Number.isSafeInteger(userId) || userId <= 0) {
     return <DetailStatus title="ID de usuario inválido" description="El enlace no contiene un identificador de usuario válido." />
@@ -93,7 +93,7 @@ export default function AdminUserDetailPage() {
     return <DetailStatus title="Error al cargar el usuario" description={error?.message ?? 'No pudimos cargar la información del usuario.'} />
   }
 
-  const name = fullName(user) || user.correo || `Usuario ${user.id}`
+  const name = user.nombre || user.correo || `Usuario ${user.id}`
 
   return (
     <section className="section admin-user-detail-page" aria-labelledby="user-title">
@@ -121,8 +121,8 @@ export default function AdminUserDetailPage() {
         <div className="card shadow-sm">
           <div className="card-body p-3 p-md-4">
             <h2 className="fs-5 mb-1">Compras asociadas</h2>
-            <p className="text-muted small">Se asocian las órdenes cuyo correo o RUN coincide con el del usuario.</p>
-            <UserOrders orders={orders} ordersError={ordersError} />
+            <p className="text-muted small">Se muestran los pedidos cuyo ID de comprador coincide con el ID del usuario.</p>
+            <UserOrders orders={orders} ordersError={ordersError} incomplete={incomplete} />
           </div>
         </div>
       </div>

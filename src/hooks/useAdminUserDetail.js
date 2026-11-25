@@ -47,10 +47,12 @@ export function useAdminUserDetail(userId) {
 
       const user = toPublicUser(rawUser)
       const ordersOk = ordersOutcome.status === 'fulfilled' && isRecordCollection(ordersOutcome.value)
+      const association = ordersOk ? findUserOrders(user, ordersOutcome.value) : null
       setDetail({
         userId,
         user,
-        orders: ordersOk ? findUserOrders(user, ordersOutcome.value) : null,
+        orders: association?.matches ?? null,
+        incomplete: association?.incomplete ?? false,
         loading: false,
         error: null,
         ordersError: !ordersOk,
@@ -61,6 +63,6 @@ export function useAdminUserDetail(userId) {
     return () => { active = false }
   }, [userId])
 
-  const { user, orders, loading, error, ordersError } = detail
-  return { user, orders, loading, error, ordersError }
+  const { user, orders, loading, error, ordersError, incomplete } = detail
+  return { user, orders, loading, error, ordersError, incomplete }
 }
