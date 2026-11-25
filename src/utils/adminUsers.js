@@ -1,4 +1,4 @@
-export const ROLE_LABELS = {
+const ROLE_LABELS = {
   cliente: 'Cliente',
   vendedor: 'Vendedor',
   administrador: 'Administrador',
