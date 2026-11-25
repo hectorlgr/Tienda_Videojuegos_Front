@@ -7,6 +7,7 @@ import DetailAddToCartButton from '../components/store/DetailAddToCartButton'
 import { useProductDetail } from '../hooks/useProductDetail'
 import { ProductNotFoundError } from '../services/productService'
 import ProductPrice from '../components/store/ProductPrice'
+import ProductDescription from '../components/common/ProductDescription'
 
 const optionalFields = [
   ['formato', 'Formato'],
@@ -96,8 +97,8 @@ export default function ProductDetailPage() {
                     {available ? `Disponible · ${product.stock} unidades` : 'Agotado'}
                   </p>
                 </div>
-                <p className="detail-short-description">{product.descripcionCorta}</p>
-                <p className="detail-long-description">{product.descripcionLarga}</p>
+                <ProductDescription value={product.descripcionCorta} className="detail-short-description" fromRawg={product.rawgId != null} />
+                <ProductDescription value={product.descripcionLarga} className="detail-long-description" fromRawg={product.rawgId != null} />
                 {specifications.length > 0 && (
                   <dl className="detail-specifications">
                     {specifications.map(([field, label]) => (

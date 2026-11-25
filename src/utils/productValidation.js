@@ -1,5 +1,6 @@
 import { CATALOG_CATEGORIES } from '../config/catalogCategories'
 import { calculateOfferPrice, getCategoryFields, OFFER_PERCENTAGES } from '../config/productForm'
+import { getDescriptionText, LONG_DESCRIPTION_LIMIT, SHORT_DESCRIPTION_HTML_LIMIT, SHORT_DESCRIPTION_LIMIT } from './productDescription'
 
 export function normalizeProductCode(code) {
   return code.trim().toUpperCase()
@@ -46,9 +47,16 @@ export function validateProductForm({ product, inventory }, rawgGame = null) {
       errors.porcentajeOferta = 'El precio final redondeado debe ser mayor que $0 y menor que el precio normal.'
     }
   }
-  // El formulario antiguo generaba la descripción corta con los primeros 120 caracteres.
-  if (product.descripcionCorta.length > 120) errors.descripcionCorta = 'Máximo 120 caracteres.'
-  if (product.descripcionLarga.length > 500) errors.descripcionLarga = 'Máximo 500 caracteres.'
+  if (!rawgGame) {
+    if (getDescriptionText(product.descripcionCorta).length > SHORT_DESCRIPTION_LIMIT) {
+      errors.descripcionCorta = `Máximo ${SHORT_DESCRIPTION_LIMIT} caracteres visibles.`
+    } else if (product.descripcionCorta.length > SHORT_DESCRIPTION_HTML_LIMIT) {
+      errors.descripcionCorta = 'Simplifica el formato de la descripción corta para poder guardarla.'
+    }
+    if (getDescriptionText(product.descripcionLarga).length > LONG_DESCRIPTION_LIMIT) {
+      errors.descripcionLarga = `Máximo ${LONG_DESCRIPTION_LIMIT} caracteres visibles.`
+    }
+  }
   if (!validInteger(inventory.stock, 0)) {
     errors.stock = 'Ingresa un stock entero seguro mayor o igual a 0.'
   }

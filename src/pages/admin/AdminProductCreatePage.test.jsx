@@ -15,6 +15,12 @@ function change(label, value) {
   fireEvent.change(screen.getByLabelText(label), { target: { value } })
 }
 
+function pasteDescription(label, html) {
+  fireEvent.paste(screen.getByRole('textbox', { name: label }), {
+    clipboardData: { getData: type => type === 'text/html' ? html : '' },
+  })
+}
+
 function renderForm(category) {
   const view = render(
     <MemoryRouter>
@@ -50,7 +56,8 @@ describe('Integracion de catalogo', () => {
     const { container } = renderForm('figura')
     change('Nombre', 'Figura de Mario')
     change('Franquicia', 'Super Mario')
-    change(/Descripci.n larga/, 'Descripcion de prueba')
+    pasteDescription(/Descripci.n corta/, '<p><strong>Edición especial</strong></p>')
+    pasteDescription(/Descripci.n larga/, '<p>Incluye una <em>figura de Mario</em>.</p>')
     const file = new File(['test'], 'cover.png', { type: 'image/png' })
     fireEvent.change(container.querySelector('input[type="file"]'), { target: { files: [file] } })
     expect(await screen.findByAltText('Imagen principal')).toHaveAttribute('src', coverUrl)
@@ -65,14 +72,16 @@ describe('Integracion de catalogo', () => {
     expect(upload.body.get('archivo').name).toBe('cover.png')
     expect(productUrl.pathname).toBe('/api/productos')
     expect(JSON.parse(save.body)).toEqual({
-      codigo: 'DEMO-01', nombre: 'Figura de Mario', categoria: 'FIGURA', descripcionCorta: null,
-      descripcion: 'Descripcion de prueba', marca: null, plataforma: null, genero: null, formato: null,
+      codigo: 'DEMO-01', nombre: 'Figura de Mario', categoria: 'FIGURA',
+      descripcionCorta: '<p><strong>Edición especial</strong></p>',
+      descripcion: '<p>Incluye una <em>figura de Mario</em>.</p>', marca: null, plataforma: null, genero: null, formato: null,
       ecosistema: null, compatibilidad: null, franquicia: 'Super Mario', precio: 19990, precioOferta: 15992,
       enOferta: true, stock: 3, stockCritico: null, habilitado: true, imagenUrl: coverUrl, imagenes: [],
     })
     expect(fetchMock).toHaveBeenCalledTimes(2)
     expect(screen.getByLabelText(/Categor.a/)).toHaveValue('figura')
     expect(screen.getByLabelText('Nombre')).toHaveValue('')
+    expect(screen.getByRole('textbox', { name: /Descripci.n corta/ }).textContent).toBe('')
   })
 
   it('importa con nueve campos y conserva datos ante un 409', async () => {
@@ -88,6 +97,7 @@ describe('Integracion de catalogo', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Buscar' }))
     fireEvent.click(await screen.findByRole('button', { name: /Elden Ring.*Ya importado/ }))
     expect(await screen.findByText('<b>Texto</b>')).toBeInTheDocument()
+    expect(screen.queryByRole('textbox', { name: /Descripci.n (corta|larga)/ })).not.toBeInTheDocument()
     change('Plataforma', 'PC')
     change('Formato', 'digital')
     fireEvent.click(screen.getByRole('button', { name: 'Crear producto' }))

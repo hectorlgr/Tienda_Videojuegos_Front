@@ -1,9 +1,13 @@
+import { useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import ProductCard from '../components/store/ProductCard'
 import { CATALOG_CATEGORIES } from '../config/catalogCategories'
 import { useCatalogProducts } from '../hooks/useCatalogProducts'
+import { gsap, motionAllowed, useGSAP } from '../utils/storeAnimations'
 
 export default function ProductsPage() {
+  const headingRef = useRef(null)
+  const gridRef = useRef(null)
   const { products, loading, error } = useCatalogProducts()
   const [searchParams, setSearchParams] = useSearchParams()
   // La selección vive en el estado de React Router, también al navegar atrás/adelante.
@@ -24,6 +28,37 @@ export default function ProductsPage() {
       ? 'No se encontraron productos para las categorías y la búsqueda indicadas.'
       : 'No se encontraron productos para la búsqueda indicada.'
     : 'No hay productos para las categorías seleccionadas.'
+
+  useGSAP(() => {
+    const media = gsap.matchMedia()
+    media.add(motionAllowed, () => {
+      gsap.from(headingRef.current, {
+        y: 10,
+        opacity: 0.7,
+        duration: 0.3,
+        ease: 'power2.out',
+      })
+    })
+    return () => media.revert()
+  })
+
+  useGSAP(() => {
+    const grid = gridRef.current
+    if (!grid) return
+
+    const media = gsap.matchMedia()
+    media.add(motionAllowed, () => {
+      // Acota la secuencia para que el tiempo no crezca con el catálogo.
+      gsap.from(Array.from(grid.children).slice(0, 9), {
+        y: 12,
+        opacity: 0.7,
+        duration: 0.3,
+        stagger: 0.035,
+        ease: 'power2.out',
+      })
+    })
+    return () => media.revert()
+  }, { dependencies: [products, searchParams, loading, error], revertOnUpdate: true })
 
   function toggleCategory(value, checked) {
     setSearchParams(previous => {
@@ -65,7 +100,7 @@ export default function ProductsPage() {
             </div>
           </aside>
           <div id="store" className="col-lg-9">
-            <div className="store-filter clearfix">
+            <div className="store-filter clearfix" ref={headingRef}>
               <h1 id="catalog-title" className="catalog-title">Productos</h1>
               <span className="store-qty">
                 {searchTerm ? 'Resultados de búsqueda en el catálogo' : selectedCategories.length ? 'Productos de las categorías seleccionadas' : 'Catálogo completo de la tienda'}
@@ -81,7 +116,7 @@ export default function ProductsPage() {
               ) : filteredProducts.length === 0 ? (
                 <p className="catalog-state" role="status">{noResultsMessage}</p>
               ) : (
-                <div className="row g-4" id="products-grid">
+                <div className="row g-4" id="products-grid" ref={gridRef}>
                   {filteredProducts.map(product => (
                     <div className="col-12 col-sm-6 col-lg-4" key={product.id}>
                       <ProductCard product={product} />

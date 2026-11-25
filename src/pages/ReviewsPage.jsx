@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom'
 import ImageWithFallback from '../components/common/ImageWithFallback'
+import LocalEditorialPosts from '../components/store/LocalEditorialPosts'
 import { publicAsset } from '../utils/assets'
 
 // Contenido editorial de muestra conservado del proyecto original.
@@ -39,6 +40,8 @@ export default function ReviewsPage() {
           <h1 className="mt-3 mb-0">Críticas y noticias</h1>
         </div>
       </header>
+
+      <LocalEditorialPosts />
 
       <section id="noticia-destacada" className="section" aria-labelledby="featured-news-heading">
         <div className="container">

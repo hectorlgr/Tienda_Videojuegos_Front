@@ -606,6 +606,12 @@ a:focus-visible, button:focus-visible {
   margin-bottom: 0;
 }
 
+.reviews-page .product-rich-description a {
+  color: #54178d;
+  text-decoration: underline;
+  overflow-wrap: anywhere;
+}
+
 /* Catálogo: tarjetas de Electro con controles visibles también en pantallas táctiles. */
 .catalog-title {
   font-size: 24px;
@@ -799,6 +805,39 @@ a:focus-visible, button:focus-visible {
 
 .product-detail-page .is-unavailable {
   color: #b42332;
+}
+
+.product-description-editor .tiptap {
+  min-height: 6rem;
+  padding: 0.75rem;
+  overflow-wrap: anywhere;
+}
+
+.product-description-editor .tiptap:focus-visible {
+  outline: 2px solid #7020ba;
+  outline-offset: -2px;
+}
+
+.product-description-editor .tiptap ul,
+.product-description-editor .tiptap ol,
+.product-rich-description ul,
+.product-rich-description ol {
+  padding-inline-start: 1.5rem;
+}
+
+.product-description-editor .tiptap ul,
+.product-rich-description ul {
+  list-style: disc;
+}
+
+.product-description-editor .tiptap ol,
+.product-rich-description ol {
+  list-style: decimal;
+}
+
+.product-description-editor .tiptap > :last-child,
+.product-rich-description > :last-child {
+  margin-bottom: 0;
 }
 
 .detail-short-description {
