@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from 'react'
+import { useLayoutEffect, useRef, useState } from 'react'
+import { useAuth } from '../hooks/useAuth'
 import { CartContext } from './CartContext'
 import { assertNumericId } from '../utils/ids'
-import { persistCart, readCart } from '../utils/cartStorage'
+import { createCartStorage, GUEST, matchesPurchase } from '../utils/cartStorage'
 import { getInventory, getInventoryByProductId, InventoryNotFoundError } from '../services/inventoryService'
 import { reconcileCart } from '../utils/reconcileCart'
 
@@ -14,47 +15,60 @@ function assertQuantity(quantity, allowRemoval = false) {
 }
 
 export default function CartProvider({ children }) {
-  const [restoredItems] = useState(readCart)
-  const [items, setItems] = useState(restoredItems)
-  const pendingOperations = useRef(new Map())
+  const { user } = useAuth()
+  const owner = !user ? GUEST : user.rol === 'cliente' ? `cliente:${user.id}` : null
+  const [storage] = useState(createCartStorage)
+  const knownStock = useRef(new Map())
+  const previousOwner = useRef(owner)
+  const activeScope = useRef(null)
+  const [view, setView] = useState(null)
 
-  useEffect(() => {
-    const pending = pendingOperations.current
+  useLayoutEffect(() => {
+    const mergeGuest = Boolean(owner && owner !== GUEST && previousOwner.current !== owner)
+    previousOwner.current = owner
+    const items = storage.open(owner, mergeGuest, knownStock.current)
+    const scope = { owner, items, active: true, pending: new Map() }
+    activeScope.current = scope
+
+    function update(next) {
+      if (!scope.active || !owner || next === scope.items) return
+      storage.save(owner, next)
+      scope.items = next
+      setView({ scope, items: next })
+    }
+    scope.update = update
+    setView({ scope, items })
+
+    if (items.length) {
+      getInventory().then(inventory => {
+        if (!scope.active) return
+        // Solo aplicar el inventario a líneas que no cambiaron durante la consulta.
+        const unchanged = scope.items.filter(item => items.includes(item))
+        const stock = new Map(inventory.map(row => [row.productoId, row.stock]))
+        for (const item of unchanged) knownStock.current.set(item.productoId, stock.get(item.productoId) ?? 0)
+        const reconciled = reconcileCart(unchanged, inventory)
+        if (reconciled === unchanged) return
+        const byId = new Map(reconciled.map(item => [item.productoId, item]))
+        update(scope.items.flatMap(item => unchanged.includes(item) ? byId.get(item.productoId) ?? [] : item))
+      }).catch(() => {
+        // Conservar el carrito si falla la consulta de inventario.
+      })
+    }
     return () => {
-      pending.forEach(queue => { queue.active = false })
-      pending.clear()
+      activeScope.current = null
+      scope.active = false
+      scope.pending.forEach(queue => { queue.active = false })
+      scope.pending.clear()
     }
-  }, [])
+  }, [owner, storage])
 
-  useEffect(() => {
-    if (restoredItems.length === 0) return
-    let active = true
-
-    async function reconcileRestoredItems() {
-      try {
-        const inventory = await getInventory()
-        if (!active) return
-        const reconciled = reconcileCart(restoredItems, inventory)
-        if (reconciled === restoredItems) return
-
-        // Esta fase corrige solo la restauración, nunca operaciones posteriores.
-        setItems(current => current === restoredItems ? reconciled : current)
-      } catch {
-        // Un fallo de inventario no significa que los productos estén agotados.
-      }
-    }
-
-    reconcileRestoredItems()
-    return () => { active = false }
-  }, [restoredItems])
-
-  useEffect(() => {
-    persistCart(items)
-  }, [items])
+  const scope = view?.scope.owner === owner ? view.scope : null
+  const items = scope ? view.items : []
 
   // Cada producto mantiene el orden de sus operaciones; productos distintos no se bloquean.
   async function withCurrentStock(productId, updateItems) {
-    const pending = pendingOperations.current
+    if (!scope?.active || !owner) return
+    const pending = scope.pending
     let queue = pending.get(productId)
     if (!queue) {
       queue = { active: true, tail: Promise.resolve() }
@@ -75,7 +89,8 @@ export default function CartProvider({ children }) {
         stock = 0
       }
       if (!queue.active) return
-      setItems(current => queue.active ? updateItems(current, stock) : current)
+      knownStock.current.set(productId, stock)
+      scope.update(updateItems(scope.items, stock))
     })
     queue.tail = operation
     try {
@@ -106,10 +121,12 @@ export default function CartProvider({ children }) {
 
   function removeItem(productId) {
     assertNumericId(productId)
-    const queue = pendingOperations.current.get(productId)
+    if (!scope?.active || !owner) return
+    const queue = scope.pending.get(productId)
     if (queue) queue.active = false
-    pendingOperations.current.delete(productId)
-    setItems((current) => current.some((item) => item.productoId === productId)
+    scope.pending.delete(productId)
+    const current = scope.items
+    scope.update(current.some((item) => item.productoId === productId)
       ? current.filter((item) => item.productoId !== productId)
       : current)
   }
@@ -135,15 +152,27 @@ export default function CartProvider({ children }) {
   }
 
   function clearCart() {
-    pendingOperations.current.forEach(queue => { queue.active = false })
-    pendingOperations.current.clear()
-    setItems((current) => current.length === 0 ? current : [])
+    if (!scope?.active || !owner) return
+    scope.pending.forEach(queue => { queue.active = false })
+    scope.pending.clear()
+    if (scope.items.length) scope.update([])
+  }
+
+  function clearPurchasedCart(buyerId, purchased) {
+    if (owner !== `cliente:${buyerId}`) return
+    const current = activeScope.current
+    const visible = current?.owner === owner
+    if (visible && (current.pending.size || !matchesPurchase(current.items, purchased))) return
+    if (storage.clearPurchased(buyerId, purchased) && visible) {
+      current.items = []
+      setView({ scope: current, items: current.items })
+    }
   }
 
   const totalItems = items.reduce((total, item) => total + item.cantidad, 0)
 
   return (
-    <CartContext.Provider value={{ items, addItem, setItemQuantity, removeItem, clearCart, totalItems }}>
+    <CartContext.Provider value={{ items, addItem, setItemQuantity, removeItem, clearCart, clearPurchasedCart, totalItems }}>
       {children}
     </CartContext.Provider>
   )

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import ShippingDestination from '../components/store/ShippingDestination'
 import { SHIPPING_REGIONS } from '../config/shippingRegions'
@@ -11,6 +11,7 @@ import { initialCheckoutDelivery, normalizeCheckoutDelivery, validateCheckout } 
 import { calculateCartTotal, calculateLineSubtotal, calculateProductsSubtotal, isValidPrice } from '../utils/cartCalculations'
 import { formatCLP } from '../utils/currency'
 import { getEffectivePrice } from '../utils/pricing'
+import { readAccessToken, userFromToken } from '../utils/authSession'
 
 const deliveryFields = [
   { name: 'destinatario', label: 'Destinatario', maxLength: 255 },
@@ -31,18 +32,22 @@ function readAttempt(key) {
 
 function saveAttempt(key, attempt) {
   try {
-    if (attempt) sessionStorage.setItem(key, JSON.stringify(attempt))
-    else sessionStorage.removeItem(key)
+    sessionStorage.setItem(key, JSON.stringify(attempt))
+    return true
   } catch {
-    // El intento sigue disponible en memoria durante esta visita.
+    return false
   }
 }
 
 export default function CheckoutPage() {
+  const { user } = useAuth()
+  return user?.rol === 'cliente' ? <BuyerCheckout key={user.id} user={user} /> : null
+}
+
+function BuyerCheckout({ user }) {
   const navigate = useNavigate()
   const { lines, loading, error } = useCartDetails()
-  const { user } = useAuth()
-  const { items, clearCart } = useCart()
+  const { clearPurchasedCart } = useCart()
   const [delivery, setDelivery] = useState(() => initialCheckoutDelivery(user))
   const editedFields = useRef(new Set())
   const [submitted, setSubmitted] = useState(false)
@@ -51,6 +56,12 @@ export default function CheckoutPage() {
   const [paymentError, setPaymentError] = useState('')
   const attemptKey = `checkout-attempt-${user.id}`
   const [attempt, setAttempt] = useState(() => readAttempt(attemptKey))
+  const persisted = useRef(Boolean(attempt))
+  const mounted = useRef(false)
+  useLayoutEffect(() => {
+    mounted.current = true
+    return () => { mounted.current = false }
+  }, [])
   const submitting = useRef(false)
   const needsDelivery = lines.some(({ product }) => product?.categoria !== 'juego' || product?.formato !== 'digital')
   const shippingCost = needsDelivery ? 3990 : 0
@@ -82,6 +93,14 @@ export default function CheckoutPage() {
 
   async function confirmOrder() {
     if (submitting.current) return
+    const buyerId = user.id
+    const token = readAccessToken()
+    const session = userFromToken(token)
+    if (session?.id !== buyerId || session.rol !== 'cliente') {
+      setPaymentError('Verifica tu sesión antes de confirmar la compra.')
+      return
+    }
+    const sameSession = () => mounted.current && readAccessToken() === token
     setPaymentError('')
     let purchase = attempt
     if (!purchase) {
@@ -103,7 +122,14 @@ export default function CheckoutPage() {
         },
       }
       setAttempt(purchase)
-      saveAttempt(attemptKey, purchase)
+      persisted.current = saveAttempt(attemptKey, purchase)
+    }
+
+    function retireAttempt() {
+      if (!persisted.current) return true
+      if (readAttempt(attemptKey)?.id !== purchase.id) return false
+      sessionStorage.removeItem(attemptKey)
+      return true
     }
 
     submitting.current = true
@@ -112,19 +138,18 @@ export default function CheckoutPage() {
       const { status, data } = await createOrder(purchase.body, purchase.id)
       if (![200, 201].includes(status) || data?.resultado !== 'PEDIDO_CREADO' ||
           !Number.isSafeInteger(data.pedidoId) || data.pedidoId <= 0) {
-        setPaymentError('Tu pedido aún no está confirmado. Reintenta en unos segundos para consultar el mismo intento.')
+        if (sameSession()) setPaymentError('Tu pedido aún no está confirmado. Reintenta en unos segundos para consultar el mismo intento.')
         return
       }
+      if (retireAttempt()) clearPurchasedCart(buyerId, purchase.body.items)
+      if (!sameSession()) return
       setAttempt(null)
-      saveAttempt(attemptKey, null)
-      const purchased = purchase.body.items
-      if (items.length === purchased.length && items.every(item =>
-        purchased.some(line => line.productoId === item.productoId && line.cantidad === item.cantidad))) clearCart()
       navigate('/compra-exitosa', { replace: true, state: { pedidoId: data.pedidoId, estadoPedido: data.estadoPedido } })
     } catch (failure) {
+      if (!sameSession()) return
       if ([400, 413, 415, 422].includes(failure.status)) {
         setAttempt(null)
-        saveAttempt(attemptKey, null)
+        retireAttempt()
         setAccepted(false)
         setPaymentError('No pudimos completar el pedido. Revisa el stock, los precios y los datos de entrega antes de volver a intentar.')
       } else {
@@ -134,7 +159,7 @@ export default function CheckoutPage() {
       }
     } finally {
       submitting.current = false
-      setSending(false)
+      if (mounted.current) setSending(false)
     }
   }
 
