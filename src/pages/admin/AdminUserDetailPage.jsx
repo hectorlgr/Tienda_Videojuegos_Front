@@ -1,6 +1,5 @@
 import { Link, useParams } from 'react-router-dom'
 import { useAdminUserDetail } from '../../hooks/useAdminUserDetail'
-import { UserNotFoundError } from '../../services/userService'
 import { fullName, roleBadgeClass, roleLabel } from '../../utils/adminUsers'
 import { formatCLP } from '../../utils/currency'
 import { orderStatusClass } from '../../utils/orderStatus'
@@ -90,11 +89,8 @@ export default function AdminUserDetailPage() {
   if (loading) {
     return <DetailStatus title="Detalle de usuario" description="Cargando usuario…" loading />
   }
-  if (error instanceof UserNotFoundError) {
-    return <DetailStatus title="Usuario no encontrado" description="No encontramos el usuario que buscas." />
-  }
   if (error || !user) {
-    return <DetailStatus title="Error al cargar el usuario" description="No pudimos cargar la información del usuario. Inténtalo más tarde." />
+    return <DetailStatus title="Error al cargar el usuario" description={error?.message ?? 'No pudimos cargar la información del usuario.'} />
   }
 
   const name = fullName(user) || user.correo || `Usuario ${user.id}`

@@ -15,6 +15,7 @@ import PurchaseSuccessPage from '../pages/PurchaseSuccessPage'
 import PurchaseFailurePage from '../pages/PurchaseFailurePage'
 import LoginPage from '../pages/LoginPage'
 import RegisterPage from '../pages/RegisterPage'
+import ProfilePage from '../pages/ProfilePage'
 import ContactPage from '../pages/ContactPage'
 import ReviewsPage from '../pages/ReviewsPage'
 import NotFoundPage from '../pages/NotFoundPage'
@@ -39,11 +40,14 @@ export default function AppRouter() {
         <Route path="ofertas" element={<OffersPage />} />
         <Route path="nosotros" element={<AboutPage />} />
         <Route path="carrito" element={<CartPage />} />
-        <Route path="checkout" element={<CheckoutPage />} />
-        <Route path="compra-exitosa" element={<PurchaseSuccessPage />} />
         <Route path="compra-rechazada" element={<PurchaseFailurePage />} />
         <Route path="login" element={<LoginPage />} />
         <Route path="registro" element={<RegisterPage />} />
+        <Route element={<ProtectedRoute allowedRoles={['cliente']} />}>
+          <Route path="checkout" element={<CheckoutPage />} />
+          <Route path="compra-exitosa" element={<PurchaseSuccessPage />} />
+          <Route path="perfil" element={<ProfilePage />} />
+        </Route>
         <Route path="contacto" element={<ContactPage />} />
         <Route path="criticas" element={<ReviewsPage />} />
         <Route path="*" element={<NotFoundPage />} />

@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import { getProducts } from '../services/productService'
 import { getInventory } from '../services/inventoryService'
 import { getOrders } from '../services/orderService'
-import { getUsers } from '../services/userService'
 import { countSoldOutProducts, isRecordCollection } from '../utils/adminMetrics'
 
 async function loadCollection(request) {
@@ -19,25 +18,23 @@ export function useAdminDashboard() {
     let active = true
 
     async function loadMetrics() {
-      const [products, inventory, orders, users] = (await Promise.allSettled([
+      const [products, inventory, orders] = (await Promise.allSettled([
         loadCollection(getProducts),
         loadCollection(getInventory),
         loadCollection(getOrders),
-        loadCollection(getUsers),
       ])).map(outcome => outcome.status === 'fulfilled' ? outcome.value : null)
       if (!active) return
 
-      // Solo se conservan conteos: los usuarios (con password) no se guardan en estado.
       const metrics = {
         products: products?.length ?? null,
-        users: users?.length ?? null,
+        users: null,
         orders: orders?.length ?? null,
         soldOut: products && inventory ? countSoldOutProducts(products, inventory) : null,
       }
       setResult({
         metrics,
         loading: false,
-        partialError: [products, inventory, orders, users].includes(null),
+        partialError: [products, inventory, orders].includes(null),
       })
     }
 

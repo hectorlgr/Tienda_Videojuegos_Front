@@ -122,7 +122,9 @@ describe('Integracion de catalogo', () => {
     clearSession()
     const claims = btoa(JSON.stringify({ userId: 1, sub: 'admin@example.com', role: 'ADMINISTRADOR', exp: Date.now() / 1000 + 3600 }))
     const token = `header.${claims}.signature`
+    persistSession('token-vencido')
     fetchMock.mockResolvedValueOnce(response({ token }))
+    fetchMock.mockResolvedValueOnce(response({ id: 1, nombre: 'Administradora', email: 'admin@example.com' }))
     fetchMock.mockResolvedValueOnce(response({}))
     render(
       <MemoryRouter>
@@ -139,9 +141,12 @@ describe('Integracion de catalogo', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Iniciar sesión' }))
     expect(await screen.findByRole('heading', { name: 'Panel de prueba' })).toBeInTheDocument()
     await expect(getAdminProducts()).resolves.toEqual([])
-    const [[loginUrl, login], [, admin]] = fetchMock.mock.calls
+    const [[loginUrl, login], [profileUrl, profile], [, admin]] = fetchMock.mock.calls
     expect(loginUrl.pathname).toBe('/auth/login')
     expect(login.headers.Authorization).toBeUndefined()
+    expect(JSON.parse(login.body)).toEqual({ email: 'admin@example.com', password: 'demo' })
+    expect(profileUrl.pathname).toBe('/api/v1/usuarios/me')
+    expect(profile.headers.Authorization).toBe(`Bearer ${token}`)
     expect(admin.headers.Authorization).toBe(`Bearer ${token}`)
   })
 })

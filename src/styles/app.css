@@ -88,6 +88,16 @@ a:focus-visible, button:focus-visible {
   color: #8a2be2;
 }
 
+.store-account .store-account-greeting {
+  cursor: pointer;
+}
+
+.store-account .store-account-greeting:hover,
+.store-account .store-account-greeting:focus-visible {
+  color: #c4b5fd;
+  text-decoration: underline;
+}
+
 .navigation-toggle {
   display: none;
   align-items: center;

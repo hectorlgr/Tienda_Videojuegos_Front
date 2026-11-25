@@ -54,6 +54,7 @@ export default function StoreHeader() {
   const { totalItems } = useCart()
   const { user, isAuthenticated, logout } = useAuth()
   const identity = user?.nombre?.trim() || user?.correo || 'Usuario'
+  const accountPath = { administrador: '/admin', cliente: '/perfil' }[user?.rol]
 
   function handleLogout() {
     logout()
@@ -66,7 +67,13 @@ export default function StoreHeader() {
         <ul className="header-links store-account">
           {isAuthenticated ? (
             <>
-              <li>Hola, {identity}</li>
+              <li>
+                {accountPath ? (
+                  <Link className="store-account-greeting" to={accountPath}>Hola, {identity}</Link>
+                ) : (
+                  <>Hola, {identity}</>
+                )}
+              </li>
               <li><button type="button" onClick={handleLogout}>Cerrar sesión</button></li>
             </>
           ) : (

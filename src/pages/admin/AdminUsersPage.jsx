@@ -21,7 +21,7 @@ export default function AdminUsersPage() {
         {loading ? (
           <p className="catalog-state" role="status">Cargando usuarios...</p>
         ) : error ? (
-          <p className="alert alert-danger" role="alert">No fue posible cargar los usuarios.</p>
+          <p className="alert alert-danger" role="alert">{error.message}</p>
         ) : users.length === 0 ? (
           <p className="catalog-state" role="status">No hay usuarios registrados.</p>
         ) : (

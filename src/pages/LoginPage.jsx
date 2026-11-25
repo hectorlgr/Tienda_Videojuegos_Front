@@ -38,10 +38,10 @@ export default function LoginPage() {
 
     try {
       const data = await postJson('/auth/login', { email: email.trim(), password })
-      const user = login(data?.token)
+      const user = await login(data?.token)
       navigate(HOME_BY_ROLE[user.rol], { replace: true })
     } catch (failure) {
-      setError(failure.status === 401 ? INVALID_CREDENTIALS : LOGIN_FAILED)
+      setError(failure.status === 401 ? INVALID_CREDENTIALS : failure.message || LOGIN_FAILED)
     } finally {
       submittingRef.current = false
       setSubmitting(false)

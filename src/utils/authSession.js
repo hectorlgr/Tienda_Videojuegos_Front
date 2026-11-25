@@ -1,4 +1,3 @@
-// Sesión académica: JSON Server no es un sistema de autenticación real.
 const SESSION_STORAGE_KEY = 'checkpoint.jwt'
 let accessToken = null
 const VALID_ROLES = ['cliente', 'vendedor', 'administrador']

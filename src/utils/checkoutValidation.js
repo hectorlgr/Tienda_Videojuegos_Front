@@ -1,13 +1,10 @@
 import { SHIPPING_REGIONS } from '../config/shippingRegions.js'
 
-const EMAIL_PATTERN = /^[a-z0-9!#$%&'*+/=?^_`{|}~-]+(?:\.[a-z0-9!#$%&'*+/=?^_`{|}~-]+)*@(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/i
-
 export function initialCheckoutDelivery(user) {
-  const region = SHIPPING_REGIONS.find(option => option.id === user?.region)
+  const region = SHIPPING_REGIONS.find(option => option.id === user?.region || option.nombre === user?.region)
   return {
-    nombre: user?.nombre ?? '',
-    apellidos: user?.apellidos ?? '',
-    correo: user?.correo ?? '',
+    destinatario: [user?.nombre, user?.apellidos].filter(Boolean).join(' '),
+    telefono: user?.telefono ?? '',
     direccion: user?.direccion ?? '',
     regionId: region?.id ?? '',
     comuna: region?.comunas.includes(user?.comuna) ? user.comuna : '',
@@ -21,18 +18,14 @@ export function normalizeCheckoutDelivery(values) {
 export function validateCheckout(values) {
   const normalized = normalizeCheckoutDelivery(values)
   const errors = {}
-  for (const [field, message, maxLength] of [
-    ['nombre', 'El nombre es obligatorio.', 50],
-    ['apellidos', 'Los apellidos son obligatorios.', 100],
-    ['direccion', 'La dirección es obligatoria.', 300],
+  for (const [field, label, maxLength] of [
+    ['destinatario', 'destinatario', 255],
+    ['telefono', 'teléfono', 30],
+    ['direccion', 'dirección', 255],
   ]) {
-    if (!normalized[field]) errors[field] = message
-    else if (normalized[field].length > maxLength) errors[field] = `Máximo ${maxLength} caracteres permitidos.`
+    if (!normalized[field]) errors[field] = 'Completa el campo ' + label + '.'
+    else if (normalized[field].length > maxLength) errors[field] = 'Máximo ' + maxLength + ' caracteres permitidos.'
   }
-
-  if (!normalized.correo) errors.correo = 'El correo es obligatorio.'
-  else if (normalized.correo.length > 100) errors.correo = 'Máximo 100 caracteres permitidos.'
-  else if (!EMAIL_PATTERN.test(normalized.correo)) errors.correo = 'Formato de correo no válido.'
 
   const region = SHIPPING_REGIONS.find(option => option.id === normalized.regionId)
   if (!region) errors.regionId = 'Selecciona una región válida.'

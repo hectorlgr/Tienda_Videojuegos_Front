@@ -1,16 +1,12 @@
 import { describe, it, expect } from 'vitest'
-import { isValidRun, validateRegistration } from './registerValidation.js'
+import { validateRegistration } from './registerValidation.js'
 
 const validValues = {
-  run: '12.345.678-5',
   nombre: 'Juan',
   apellidos: 'Pérez González',
   correo: 'juan.perez@duoc.cl',
   password: 'Clave123!',
   confirmPassword: 'Clave123!',
-  direccion: 'Av. Siempre Viva 742',
-  region: 'metropolitana',
-  comuna: 'Santiago',
 }
 
 describe('Validación del formulario de registro', () => {
@@ -28,11 +24,7 @@ describe('Validación del formulario de registro', () => {
     expect(Object.keys(errors)).toEqual(['nombre'])
   })
 
-  it('rechaza un RUN con dígito verificador incorrecto', () => {
-    const errors = validateRegistration({ ...validValues, run: '12.345.678-9' })
-
-    expect(isValidRun('12.345.678-5')).toBe(true)
-    expect(isValidRun('12.345.678-9')).toBe(false)
-    expect(errors.run).toBe('El RUN o dígito verificador no es válido.')
+  it('admite un registro sin apellidos', () => {
+    expect(validateRegistration({ ...validValues, apellidos: '' })).toEqual({})
   })
 })

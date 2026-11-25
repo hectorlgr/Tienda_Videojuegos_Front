@@ -1,22 +1,18 @@
 import { useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
-import { SHIPPING_REGIONS } from '../config/shippingRegions'
-import { formatRun, validateRegistration } from '../utils/registerValidation'
-import { createUser, findUserByEmail, findUserByRun } from '../services/userService'
+import { validateRegistration } from '../utils/registerValidation'
+import { registerCustomer } from '../services/userService'
 
 const initialValues = {
-  run: '', nombre: '', apellidos: '', correo: '', password: '',
-  confirmPassword: '', direccion: '', region: '', comuna: '',
+  nombre: '', apellidos: '', correo: '', password: '', confirmPassword: '',
 }
 
 const fields = [
-  { name: 'run', label: 'RUN', maxLength: 12, placeholder: 'Ej.: 12.345.678-5', autoComplete: 'off' },
   { name: 'nombre', label: 'Nombre', maxLength: 50, autoComplete: 'given-name', half: true },
-  { name: 'apellidos', label: 'Apellidos', maxLength: 100, autoComplete: 'family-name', half: true },
+  { name: 'apellidos', label: 'Apellidos (opcional)', maxLength: 100, autoComplete: 'family-name', half: true },
   { name: 'correo', label: 'Correo electrónico', type: 'email', maxLength: 100, autoComplete: 'email' },
   { name: 'password', label: 'Contraseña', type: 'password', autoComplete: 'new-password', half: true },
   { name: 'confirmPassword', label: 'Confirmar contraseña', type: 'password', autoComplete: 'new-password', half: true },
-  { name: 'direccion', label: 'Dirección', maxLength: 300, placeholder: 'Calle, número, departamento', autoComplete: 'street-address' },
 ]
 
 export default function RegisterPage() {
@@ -27,15 +23,13 @@ export default function RegisterPage() {
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState('')
   const submittingRef = useRef(false)
-  const region = SHIPPING_REGIONS.find(option => option.id === values.region)
   const errorCount = Object.keys(errors).length
 
   function handleChange(event) {
     const { name, value } = event.target
     const nextValues = {
       ...values,
-      [name]: name === 'run' ? formatRun(value) : value,
-      ...(name === 'region' ? { comuna: '' } : {}),
+      [name]: value,
     }
     setValues(nextValues)
     setSubmitError('')
@@ -55,35 +49,15 @@ export default function RegisterPage() {
     submittingRef.current = true
     setSubmitting(true)
 
-    const userData = {
-      run: formatRun(values.run),
-      nombre: values.nombre.trim(),
-      apellidos: values.apellidos.trim(),
-      correo: values.correo.trim().toLowerCase(),
-      password: values.password,
-      direccion: values.direccion.trim(),
-      region: values.region.trim(),
-      comuna: values.comuna.trim(),
-      rol: 'cliente',
-    }
-
     try {
-      const [emailUser, runUser] = await Promise.all([
-        findUserByEmail(userData.correo),
-        findUserByRun(userData.run),
-      ])
-      const duplicateErrors = {}
-      if (emailUser) duplicateErrors.correo = 'Este correo electrónico ya está registrado.'
-      if (runUser) duplicateErrors.run = 'Este RUN ya está registrado.'
-      if (Object.keys(duplicateErrors).length > 0) {
-        setErrors(duplicateErrors)
-        return
-      }
-
-      await createUser(userData)
+      await registerCustomer({
+        nombre: [values.nombre.trim(), values.apellidos.trim()].filter(Boolean).join(' '),
+        email: values.correo.trim().toLowerCase(),
+        password: values.password,
+      })
       navigate('/login', { replace: true })
-    } catch {
-      setSubmitError('No fue posible completar el registro. Inténtalo nuevamente.')
+    } catch (error) {
+      setSubmitError([400, 409].includes(error.status) ? error.message : 'No fue posible completar el registro. Inténtalo nuevamente.')
     } finally {
       submittingRef.current = false
       setSubmitting(false)
@@ -101,7 +75,7 @@ export default function RegisterPage() {
       name,
       value: values[name],
       onChange: handleChange,
-      required: true,
+      required: name !== 'apellidos',
       disabled: submitting,
       className: `${className}${errors[name] ? ' is-invalid' : ''}`,
       'aria-invalid': errors[name] ? true : undefined,
@@ -143,22 +117,6 @@ export default function RegisterPage() {
                       {feedback(name)}
                     </div>
                   ))}
-                  <div className="col-12 col-md-6">
-                    <label htmlFor="register-region" className="form-label fw-semibold">Región</label>
-                    <select {...controlProps('region', 'form-select')} autoComplete="address-level1">
-                      <option value="">Selecciona una región</option>
-                      {SHIPPING_REGIONS.map(option => <option key={option.id} value={option.id}>{option.nombre}</option>)}
-                    </select>
-                    {feedback('region')}
-                  </div>
-                  <div className="col-12 col-md-6">
-                    <label htmlFor="register-comuna" className="form-label fw-semibold">Comuna</label>
-                    <select {...controlProps('comuna', 'form-select')} autoComplete="address-level2" disabled={submitting || !region}>
-                      <option value="">Selecciona una comuna</option>
-                      {region?.comunas.map(name => <option key={name} value={name}>{name}</option>)}
-                    </select>
-                    {feedback('comuna')}
-                  </div>
                 </div>
                 <div className="d-grid mt-4">
                   <button type="submit" className="btn btn-dark py-2" disabled={submitting}>
