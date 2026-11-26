@@ -83,3 +83,19 @@ Ejecuta estos comandos desde la raíz del frontend.
 | `npm run lint` | Analiza el código con ESLint. |
 | `npm run build` | Genera la compilación de producción en `dist/`. |
 | `npm run preview` | Sirve localmente la compilación existente para inspeccionarla. Requiere ejecutar antes `npm run build`. |
+
+## Imagen Docker para Linux amd64
+
+Desde la raíz del frontend, sustituye el origen de ejemplo por el que abrirá el navegador (incluido el puerto si corresponde).
+
+```sh
+docker buildx build --platform linux/amd64 --pull --no-cache --load --build-arg VITE_API_BASE_URL=http://tienda.checkpoint.test:18435 -t checkpoint-store-frontend:2.3.5 .
+```
+
+El Dockerfile fija ambos manifiestos amd64 por digest. Node instala las versiones de `package-lock.json` con `npm ci` y ejecuta `npm run build`. La imagen de Nginx recibe el contenido de `dist/` en `/srv/checkpoint/`. El argumento es obligatorio, público y admite una URL absoluta HTTP o HTTPS sin credenciales. Vite incorpora su valor al JavaScript. Un cambio de origen requiere reconstruir la imagen.
+
+### Integración posterior con Compose
+
+Publica el puerto 80 de Nginx y conecta Nginx y el Gateway a una red compartida. El Gateway debe resolver con el nombre `gateway` y escuchar en el puerto interno 9090 al iniciar Nginx. Si Compose recrea el Gateway con otra IP, recarga o reinicia Nginx para resolver el nombre de nuevo. Mantén los puertos de Gateway, Eureka y MySQL internos. Configura `CATALOGO_PUBLIC_BASE_URL` en catálogo con el mismo origen público para que las imágenes devuelvan URLs accesibles desde el navegador.
+
+`nginx/default.conf` sirve los estáticos y devuelve `index.html` en las rutas de BrowserRouter. Reenvía `/auth/` y `/api/` con la URI original, las cabeceras de la petición y el cuerpo, y conserva los errores del Gateway. Incluye `POST /api/productos/imagenes/subir` (campo multipart `archivo`) y `GET /api/productos/imagenes/{nombre}`. El límite de 6 MiB por petición admite un archivo de 5 MiB y sus delimitadores. Las rutas de documentación Swagger, Actuator y Eureka reciben 404. Para verificar la configuración con el Gateway resoluble, ejecuta `nginx -t` dentro del contenedor.
